@@ -1,0 +1,6 @@
+schemaVersion: "1.0.0"
+events:
+  - {event_id: EVT-CONTRACT-APPROVED, event_key: contract.approved, domain: contract, trigger: "Contract approval commits.", payload_schema: "{contractId,versionId}", producer: PostgresContractRouteService, consumers: [allocation, audit], outbox_required: true, audit_relationship: contract.approved, notification_relationship: contract.approved, related_requirements: [RWP-CONTRACT-0001], implementation_status: implemented, test_status: partial}
+  - {event_id: EVT-REPORT-READY, event_key: report.scheduled.ready, domain: reporting, trigger: "Scheduled export is persisted.", payload_schema: "{scheduledReportId,recipients,exportType,checksum}", producer: scheduled-report-worker, consumers: [notification_delivery], outbox_required: true, audit_relationship: null, notification_relationship: report.scheduled.ready, related_requirements: [RWP-REPORT-0001], implementation_status: implemented, test_status: partial}
+notifications:
+  - {notification_id: NOTIFY-REPORT-READY, event_key: report.scheduled.ready, audience: scheduled_recipients, channel: email, mandatory: false, template_key: report_ready, user_action: "Open or download the report.", deep_link: /reports/scheduled, related_requirements: [RWP-REPORT-0001], implementation_status: partially_implemented, test_status: missing}

@@ -1,0 +1,29 @@
+# Controlled Glossary
+
+- **Nation Reserve:** The shared identity and product family containing RoboWorkPool and future products.
+- **RoboWorkPool:** Nation Reserve’s platform for manufacturer-fulfilled robot work, verified operation, billing, and owner earnings.
+- **Robot Owner:** An organization with verified ownership records for eligible robots.
+- **Hiring Company:** An organization that contracts with a manufacturer for robot work.
+- **Robot Manufacturer:** The approved organization that integrates robots, registers models and units, fulfills contracts, and supports replacements.
+- **Allocation:** Manufacturer-controlled selection of compatible eligible robots for an accepted contract. Do not call this an open matching marketplace.
+- **Assignment:** The durable association of a robot with a contract, schedule, facility, and operational lifecycle.
+- **Schedule:** Intended work time. Schedule alone is not verified operation and creates no charge or earning.
+- **Heartbeat:** Signed operational evidence submitted through approved robot credentials.
+- **Verified Operating Time:** Accepted operating seconds supported by eligible assignment and heartbeat evidence.
+- **Financial Accrual:** Versioned accounting result derived from finalized verified time. It is not external payment.
+- **Company Invoice:** A billing obligation. Issued does not mean paid.
+- **Owner Earnings Statement:** A record of calculated owner earnings. It is not a payout.
+- **Payment Attempt:** A processor collection attempt. Submitted does not mean settled.
+- **Payout Attempt:** An external owner transfer attempt. Submitted does not mean paid.
+- **Financially Ready:** Internally eligible for settlement preparation; not necessarily payout-ready.
+- **Payout Ready:** All internal and processor onboarding conditions are satisfied; not yet paid.
+- **Settled:** Confirmed external movement according to processor-authoritative evidence.
+- **Paid:** Completed owner payout according to authoritative provider evidence.
+- **Downtime:** A recorded interval where expected eligible operation was unavailable.
+- **Inactive Report:** Hiring Company report that an assigned robot is not operating; it does not rewrite heartbeat evidence.
+- **Replacement:** Controlled substitution of an unavailable assigned robot while retaining history.
+- **Financial Hold:** A control preventing financial progression without rewriting underlying evidence.
+- **Internal Dispute:** A RoboWorkPool business dispute about an internal record.
+- **Processor Dispute:** An external processor dispute or chargeback lifecycle.
+- **Settlement Batch:** A controlled grouping of eligible obligations for external movement.
+- **Financial Period:** Versioned accounting period with explicit closing controls.

@@ -1,0 +1,46 @@
+name: Immutable release promotion
+on:
+  workflow_dispatch:
+    inputs:
+      release: {description: Semver release number, required: true}
+      target: {type: choice, options: [staging, production, rollback], required: true}
+permissions: {contents: read, packages: write, id-token: write}
+concurrency: {group: "deploy-${{ inputs.target }}", cancel-in-progress: false}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs: {digest: "${{ steps.digest.outputs.digest }}"}
+    steps:
+      - uses: actions/checkout@v4
+        with: {ref: "v${{ inputs.release }}"}
+      - uses: pnpm/action-setup@v4
+        with: {version: 11.17.0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile && pnpm ci:validate
+      - id: digest
+        run: echo "digest=sha256:$(sha256sum pnpm-lock.yaml | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+  deploy-staging:
+    if: inputs.target == 'staging'
+    needs: validate
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Promote immutable artifact ${{ needs.validate.outputs.digest }} to staging through ECS deployment job"
+      - run: curl --fail --retry 5 "${{ secrets.STAGING_SMOKE_URL }}/health"
+  deploy-production:
+    if: inputs.target == 'production'
+    needs: validate
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Production protected environment approval obtained for ${{ needs.validate.outputs.digest }}"
+      - run: test -n "${{ secrets.PRODUCTION_DEPLOY_ROLE_ARN }}"
+      - run: curl --fail --retry 5 "${{ secrets.PRODUCTION_SMOKE_URL }}/health"
+  rollback:
+    if: inputs.target == 'rollback'
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - run: test -n "${{ secrets.PREVIOUS_APPROVED_IMAGE_DIGEST }}"
+      - run: echo "Rollback must update ECS to the previous approved digest and record release.rollback events"

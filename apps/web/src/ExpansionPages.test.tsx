@@ -1,0 +1,10 @@
+import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
+import {cleanup,render,screen,waitFor} from "@testing-library/react";
+import {ExpansionPage,isExpansionRoute} from "./ExpansionPages.js";
+
+beforeEach(()=>{history.replaceState({},"","/");});
+afterEach(()=>{cleanup();vi.restoreAllMocks();});
+describe("superseding expansion pages",()=>{
+ it("does not register the superseded expansion homepage",()=>{expect(isExpansionRoute("/")).toBe(false);});
+ it("renders three equipment tiers from the persistent catalog API",async()=>{vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({items:[{id:"a",name:"GoPro HERO",tier:1,category:"Action cameras",manufacturer:"GoPro",seller:"GoPro",trainingUseCase:"First-person video",supportedDataTypes:["first_person_video"],integrationDifficulty:"Beginner",priceLabel:"$219.99",subscriptionRequired:false,requiredAccessories:["mount"],approvalStatus:"UNREVIEWED",externalPurchaseUrl:"https://example.com"},{id:"b",name:"Ray-Ban Meta AI Glasses",tier:2,category:"Camera glasses",manufacturer:"Meta",seller:"Meta",trainingUseCase:"Visual capture",supportedDataTypes:["first_person_video"],integrationDifficulty:"Intermediate",subscriptionRequired:false,requiredAccessories:[],approvalStatus:"DATA_ACCESS_REVIEWED",externalPurchaseUrl:"https://example.com"},{id:"c",name:"Rokoko Smartsuit Pro II",tier:3,category:"Full-body motion-capture suits",manufacturer:"Rokoko",seller:"Rokoko",trainingUseCase:"Whole body",supportedDataTypes:["full_body_motion"],integrationDifficulty:"Professional",subscriptionRequired:false,requiredAccessories:[],approvalStatus:"PROJECT_COMPATIBLE",externalPurchaseUrl:"https://example.com"}]}),{status:200,headers:{"content-type":"application/json"}})));render(<ExpansionPage path="/training-equipment"/>);expect(screen.getByRole("heading",{name:"Human Wearable Training Data Marketplace"})).toBeInTheDocument();await waitFor(()=>expect(screen.getByText("GoPro HERO")).toBeInTheDocument());expect(screen.getByText("Ray-Ban Meta AI Glasses")).toBeInTheDocument();expect(screen.getByText("Rokoko Smartsuit Pro II")).toBeInTheDocument();});
+});

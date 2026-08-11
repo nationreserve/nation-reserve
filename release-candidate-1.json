@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "version": "0.1.0-rc.1",
+  "status": "generated_blocked",
+  "commit": "local-git-unavailable",
+  "databaseMigrationVersion": "0028_prompt023_timeline_events.sql",
+  "databaseMigrationBundleSha256": "80c5c1424ae482b7a56d31bf6d15a25f5489e8777a19af71acc1912b210934db",
+  "specificationVersion": "schemaVersion: \"1.0.0\"\nregistryVersion: \"2026-07-28\"",
+  "documentationVersion": "prompt-023",
+  "createdAt": "2026-08-10T19:59:33.855Z",
+  "images": {
+    "web": null,
+    "api": null,
+    "worker": null,
+    "migration": null,
+    "scheduler": null
+  },
+  "releaseNotes": "Security hardening, legal acceptance persistence, pilot controls, readiness evidence, runbooks, and RC1 documentation.",
+  "knownLimitations": "docs/known-limitations.md",
+  "openIssues": "docs/specification/mvp-gap-register.md",
+  "deferredItems": "docs/specification/deferred-work.yaml",
+  "blockers": [
+    "commit_sha_unavailable",
+    "immutable_image_digests_missing"
+  ]
+}

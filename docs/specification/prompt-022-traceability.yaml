@@ -1,0 +1,19 @@
+prompt_id: PROMPT-022
+title: Complete Platform Integration Audit, Specification Gap Closure, Cross-Portal Consistency, Data Integrity, and MVP Acceptance
+status: partially_implemented
+implementation:
+  - packages/database/migrations/0026_platform_acceptance.sql
+  - apps/api/src/acceptance-routes.ts
+  - apps/api/src/postgres-acceptance-service.ts
+  - apps/web/src/AcceptancePage.tsx
+  - scripts/acceptance/mvp.mjs
+  - scripts/acceptance/inventory.mjs
+tests:
+  - apps/web/src/AcceptancePage.test.tsx
+  - scripts/acceptance/mvp.test.mjs
+evidence:
+  - artifacts/acceptance/repository-evidence.json
+  - artifacts/acceptance/mvp-acceptance.json
+  - docs/specification/mvp-gap-register.md
+  - docs/specification/mvp-acceptance-report.md
+acceptance_rule: Global acceptance remains blocked whenever any critical stage or journey lacks executed evidence.

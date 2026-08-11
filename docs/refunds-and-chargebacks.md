@@ -1,0 +1,3 @@
+# Refunds and chargebacks
+
+Refunds remain asynchronous and must be linked to an approved credit or financial adjustment. Processor disputes are separate from customer invoice disputes. Chargebacks post to clearing/suspense and do not automatically reduce Robot Owner earnings; final allocation requires an explicit reviewed adjustment. Duplicate refund and dispute IDs are constrained per provider environment.

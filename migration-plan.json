@@ -1,0 +1,258 @@
+{
+  "generatedAt": "2026-08-11T00:47:32.403Z",
+  "migrationCount": 36,
+  "items": [
+    {
+      "filename": "0001_core_domain.sql",
+      "sha256": "6f22315ba698b43f593f21a5247949e1f6ef841e4d8d0c2542da5016201b31ce",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0002_authentication_and_access.sql",
+      "sha256": "3d0859d69216f423a217a14b5de0e6f7d7d421fd4014872f851f164df2034b80",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0003_manufacturer_robot_activation.sql",
+      "sha256": "1a97d7b080c0014e94e8689c6b589b346e702bf3a123cd722c59a42287a4edf3",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0004_contract_scheduling_allocation.sql",
+      "sha256": "078d35a061af4d8849e377e89b6c5c1fa6ce76d08868c1f1d722dd859efaf183",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0005_contract_version_mutability.sql",
+      "sha256": "1078d9732783092c7ecf634facb89e2fdc63eb4d6e83feba152b1b6d30896791",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0006_production_heartbeat_operating_time.sql",
+      "sha256": "acc6780606c741f83e56b6f8a90b0bfb5ca004eba4ee33f827fc58f8ab670830",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0007_financial_ledger_billing_settlement.sql",
+      "sha256": "d6f633511ea0faaddf8864dc987ec4a995aba6c5b0d74abcfaf03bc1f11ddae0",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0008_payment_execution_webhooks.sql",
+      "sha256": "495c257a72aaba86c4b310270e03bbe3e198b9eada806654110e501e440816c1",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0009_payment_operations_completion.sql",
+      "sha256": "2abd52e171e04b7e46cb5b1177665a702da6f5ce710c3ca91563f6013c967b86",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0010_platform_operations_control_plane.sql",
+      "sha256": "2f2200db5b6b8555c374b933c08cd73491f3d6fe118765d060dae4de7f0692ed",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0011_outbox_metadata_default.sql",
+      "sha256": "21c339af1f561c894264077895320459ac6e8fe41d8a007ca2bf195b34fde13a",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0012_reporting_analytics_warehouse.sql",
+      "sha256": "dfe16706fb56921f7fd2a34470656a61060c431a1b98ff1dea59144cc00a5c61",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0013_specification_traceability.sql",
+      "sha256": "86ea7eb52f7fa9e2ed7c6b8e0d78f7bc232ed0c83e9ebac4de5617295a8c6799",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0014_unified_activity_timeline.sql",
+      "sha256": "272daa642905d0d0ad8271def5a66c1b7e9708423ca9c4e26662e75ee57a0ea3",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0015_backend_platform_services.sql",
+      "sha256": "91492d407a77583ca05a45c9bce934001ed75190eb95605bca09a7768b99e3bd",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0016_backend_permissions_and_notification_projection.sql",
+      "sha256": "5b15083524ae70e6f3edcf6862cd7250074b83be68f9f404e573d9f361d96351",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0017_portal_domain_resources.sql",
+      "sha256": "1fad60ec31b01fcf0601ef5580b3f217c4afacd76704bfbb2b642f55a387282f",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0018_conversation_audiences.sql",
+      "sha256": "d92e0cfccdd46de5dda1162352982cfa8c1310d8ab6762c9c8fca7e75829cd57",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0019_event_audit_and_conversation_backfill.sql",
+      "sha256": "c96f21de40f1c479a05e08c300d65266f4c4f6a1319e2bd1ef3131e775948085",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0020_canonical_appendix_o.sql",
+      "sha256": "d824269642e4529949f0c248672b3faf34815d0d2a13732c0bcc289704fb1430",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0021_canonical_timeline_projection.sql",
+      "sha256": "6e7c9a1c13f8ba44a06d6d07c481f618756d42bbb84efca10d650cc4e85b9ac1",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0022_production_reliability.sql",
+      "sha256": "8f636a0daff9c3793405fee50249feda08bebed5a72245f8357252df9e8c6d3d",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0023_large_uploads_and_operational_timeline.sql",
+      "sha256": "37c5719dc0fee4e580a9d6db099c8334fcbcabc55c8d199b8d516157539db08f",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0024_release_deployment_registry.sql",
+      "sha256": "441cd55b57c01b94e26e56a74b28233e51be3980d1bdd89f46a5873853609a72",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0025_release_event_names.sql",
+      "sha256": "d7986f5afa6e9453b180b08f08c210ee19bb025d249d9acdba38f7deda0dd864",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0026_platform_acceptance.sql",
+      "sha256": "eb7890dc2156e40432404093ca8273c670e9d0f2d6b3c1e37c126128f8c53ba0",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0027_pilot_security_legal_readiness.sql",
+      "sha256": "3212d9bfe98e207a5a594f500d192bf2c6c805524dc25e777b65e08c804f85b1",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0028_prompt023_timeline_events.sql",
+      "sha256": "517425bec0b78ed52a02de7e2e6d65d089bc737287ce09a689a1deaf519c65bb",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0029_contract_funding_training_marketplace.sql",
+      "sha256": "681ed99e593e95bb053a9452367a20f5b03875c0746ca14fab8ad6d1490dd376",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0030_expansion_transactional_controls.sql",
+      "sha256": "0749752c9bd936d86df1466f7443e49d6a372a8b11f9a18cc937f8616628c88b",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0031_capacity_payments_reminders.sql",
+      "sha256": "022c31cd59b9223fe2e13b77abe5c7322d9f6abaef7736bfdd987eabdda517ed",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0032_training_capture_marketplace_admin.sql",
+      "sha256": "d2d60df310bffd2a6e16898d8e495296ed492a7a0f3508bd916651f5377be5b0",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0033_deprecate_training_compensation.sql",
+      "sha256": "7275dc20f0f5dd59ddb978e3f9fec856d9242c3cb0d7e2ca1fd1a0266b68f1e1",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0034_individual_stripe_financial_infrastructure.sql",
+      "sha256": "2a95c9b810dfae9d208f7bf976aeb58d1a4204874a3eb6c7c0da4cd037884f38",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0035_funding_refunds_disputes_supabase_security.sql",
+      "sha256": "9cd1a44f87fba1dc8a7fbd4340be7b8fa809b8fd0c3821e16e5316829697d0e2",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0036_manufacturer_directory_messaging.sql",
+      "sha256": "86cae8eea67d298c79a92b27e56e8681011a46a6c47484bb9a30abff9c181ede",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    }
+  ]
+}

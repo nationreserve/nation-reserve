@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "release": "0.0.0-local-gi",
+  "commit": "local-git-unavailable",
+  "branch": "local",
+  "createdAt": "2026-08-04T19:56:06.829Z",
+  "node": "v24.18.0",
+  "pnpm": "pnpm@11.17.0",
+  "lockfileSha256": "ede3d6978139dfc15a6fd286d2419996ae917417a709e96512ed73827121e3f1",
+  "specificationSchemaVersion": "schemaVersion: \"1.0.0\"\nregistryVersion: \"2026-07-28\"",
+  "databaseMigrationVersion": "0025_release_event_names.sql",
+  "databaseMigrationBundleSha256": "8862b0635df735088e54e6825f80fb1ce7048904f3d06982ed27771973e8f2fe",
+  "images": {
+    "web": null,
+    "api": null,
+    "worker": null,
+    "migration": null,
+    "scheduler": null
+  }
+}

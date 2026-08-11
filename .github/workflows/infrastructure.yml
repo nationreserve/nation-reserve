@@ -1,0 +1,25 @@
+name: Infrastructure plan
+on:
+  pull_request: {paths: ["infrastructure/terraform/**"]}
+  workflow_dispatch:
+    inputs:
+      environment: {type: choice, options: [development, test, staging, production], required: true}
+      apply: {type: boolean, default: false}
+permissions: {contents: read, id-token: write}
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    environment: "${{ inputs.apply && inputs.environment || 'infrastructure-plan' }}"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: {terraform_version: 1.9.8}
+      - run: terraform fmt -check -recursive infrastructure/terraform
+      - working-directory: infrastructure/terraform/environments/${{ inputs.environment || 'test' }}
+        run: terraform init -backend=false && terraform validate
+      - if: github.event_name == 'workflow_dispatch'
+        working-directory: infrastructure/terraform/environments/${{ inputs.environment }}
+        run: terraform init -backend-config="${{ secrets.TF_BACKEND_CONFIG }}" && terraform plan -out=tfplan -var="certificate_arn=${{ secrets.CERTIFICATE_ARN }}" -var="image_tag=${{ github.sha }}"
+      - if: inputs.apply
+        working-directory: infrastructure/terraform/environments/${{ inputs.environment }}
+        run: terraform apply -input=false tfplan

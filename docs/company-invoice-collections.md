@@ -1,0 +1,3 @@
+# Company invoice collections
+
+Only issued, unpaid invoices with an active default method are eligible. The service creates and commits an internal attempt before calling the provider, uses `invoice-{invoiceId}` as the stable idempotency key, and records timeouts as `unknown`. Immediate provider responses remain nonterminal. A verified success event debits processor clearing, credits accounts receivable, and updates the invoice exactly once.

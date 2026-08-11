@@ -1,0 +1,12 @@
+{
+  "name": "@nation-reserve/backend-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
+  "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run", "lint": "eslint src", "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"" },
+  "dependencies": { "@nation-reserve/contracts": "workspace:*", "zod": "latest" },
+  "devDependencies": { "@types/node": "latest", "vitest": "latest" }
+}
+
+

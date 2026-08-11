@@ -1,0 +1,8 @@
+schemaVersion: "1.0.0"
+items:
+  - {requirement_id: RWP-TIME-0001, source_id: APP-M, relationship_type: primary, section_reference: financial_authority, notes: "Expanded immutable rule is controlling."}
+  - {requirement_id: RWP-TIME-0001, source_id: PROMPT-006, relationship_type: implements, section_reference: verified_operating_time, notes: "Heartbeat implementation scope."}
+  - {requirement_id: RWP-FIN-0001, source_id: APP-J, relationship_type: primary, section_reference: rate, notes: "Current approved rate definition."}
+  - {requirement_id: RWP-CONTRACT-0001, source_id: APP-M, relationship_type: clarifies, section_reference: manufacturer_fulfillment, notes: "Clarifies older marketplace language."}
+  - {requirement_id: RWP-CONTRACT-0001, source_id: VOL-II, relationship_type: conflicts, section_reference: unavailable, notes: "Potential older matching terminology requires review after source import."}
+  - {requirement_id: RWP-SPEC-0001, source_id: PROMPT-011, relationship_type: primary, section_reference: objective, notes: "Creates the implementation-control system."}

@@ -1,0 +1,12 @@
+appendix_id: APP-O
+title: Unified Activity Timeline System
+implementation_status: backend_vertical_slice_implemented
+test_status: tests_present
+frontend: [search, filters, chronological_order, expansion, related_links, attachments, timezone_display, relative_time, absolute_time, csv_export, print, keyboard_focus, mobile_cards, color_independent_labels]
+applies_to: [contracts, companies, manufacturers, owners, robots, work_orders, training_packages, conversations, invoices, payouts, manufacturer_applications, heartbeat]
+privacy: server_authorized_events_only
+implemented_backend: [activity_feed_api, transactional_outbox_projection, organization_audiences, membership_authorization, platform_role_authorization, search, filtering, cursor_pagination]
+deferred_backend: [object_level_redaction, attachment_authorization, server_export, domain_event_metadata_retrofit, postgres_integration_tests]
+developer_requirement: All newly created entities must integrate with the Unified Activity Timeline System defined in Appendix O.
+
+

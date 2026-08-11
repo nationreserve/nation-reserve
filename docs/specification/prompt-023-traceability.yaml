@@ -1,0 +1,22 @@
+prompt_id: PROMPT-023
+title: Security Hardening, Privacy Review, Legal Readiness, Operational Readiness, Pilot Launch Configuration, and Final MVP Release Candidate
+status: implemented_with_external_blockers
+implementation:
+  - packages/database/migrations/0027_pilot_security_legal_readiness.sql
+  - packages/operations/src/pilot.ts
+  - apps/api/src/postgres-acceptance-service.ts
+  - apps/api/src/acceptance-routes.ts
+  - scripts/release/create-rc1.mjs
+tests:
+  - packages/database/src/prompt023-migration.test.ts
+  - packages/operations/src/pilot.test.ts
+  - apps/api/src/postgres-acceptance-service.test.ts
+documents:
+  - docs/security-review.md
+  - docs/privacy-review.md
+  - docs/legal-readiness.md
+  - docs/pilot-launch.md
+  - docs/release-candidate-1.md
+  - docs/known-limitations.md
+  - docs/prompt-023-implementation.md
+release_rule: RC1 remains blocked until protected CI supplies provenance and all required pilot gates are approved.

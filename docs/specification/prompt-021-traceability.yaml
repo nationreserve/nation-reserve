@@ -1,0 +1,24 @@
+schemaVersion: "1.0.0"
+prompt_id: PROMPT-021
+title: CI/CD, Infrastructure as Code, Deployment Automation, Environment Management, End-to-End Testing, Security Verification, and Production Launch Readiness
+status: implemented_unverified_external
+requirements:
+  - {id: RWP-DEPLOY-0001, area: reproducible_infrastructure, evidence: [infrastructure/terraform, docs/architecture/adr-production-deployment.md]}
+  - {id: RWP-DEPLOY-0002, area: environment_isolation, evidence: [infrastructure/terraform/environments, scripts/release/validate-environment.mjs]}
+  - {id: RWP-RELEASE-0001, area: immutable_controlled_release, evidence: [.github/workflows/release.yml, packages/database/migrations/0024_release_deployment_registry.sql]}
+  - {id: RWP-SECURITY-RELEASE-0001, area: release_security_gates, evidence: [.github/workflows/security.yml, docs/security-release-gates.md]}
+features: [infrastructure_as_code, immutable_artifacts, environment_isolation, migration_gates, release_approvals, rollback, launch_governance]
+journeys: [pull_request_to_preview, release_to_staging, approved_production_promotion, failed_deployment_rollback, migration_failure_recovery, backup_restore_drill, phased_launch]
+screens: [external_github_actions, external_aws_console, existing_platform_operations_center, existing_timeline]
+user_explanations: [maintenance_notice, incident_notice, deployment_visibility_is_platform_scoped, test_finance_is_not_live_finance]
+roles_permissions: [release.read, release.create, release.approve, release.deploy.staging, release.deploy.production, release.rollback, infrastructure.read, infrastructure.plan, infrastructure.apply, migration.read, migration.execute, migration.approve_high_risk, security.scan.read, security.exception.manage, backup.read, backup.restore.test, backup.restore.production, launch.checklist.read, launch.checklist.manage, launch.approve]
+api_inventory: [existing_health, existing_readiness, existing_metrics, existing_activity_timeline, generated_openapi]
+data_inventory: [releases, deployments, migration_deployments, security_release_scans]
+events_notifications: [release.created, release.build_succeeded, release.build_failed, release.staging_deployed, release.staging_validation_passed, release.staging_validation_failed, release.approved, release.production_deployment_started, release.production_deployment_completed, release.production_deployment_failed, release.rollback_started, release.rollback_completed, release.cancelled, database.migration_started, database.migration.completed, database.migration.failed, database.restore.started, database.restore.completed, database.restore.failed, security.release_scan.passed, security.release_scan.failed, security.exception.approved]
+configurations: [DEPLOY_ENVIRONMENT, SHUTDOWN_TIMEOUT_MS, PAYMENT_PROVIDER, PAYMENT_PROVIDER_ENVIRONMENT, PAYMENT_EXECUTION_ENABLED, COOKIE_SECURE, TIMELINE_PROJECTION_ENABLED]
+tests: [specification, formatting, lint, typecheck, unit, integration, migration, authorization, frontend, accessibility, build, container, dependency, secret, infrastructure, e2e, load, resilience, backup_restore, smoke]
+prompt_coverage:
+  implemented: [terraform_baseline, isolated_environment_definitions, container_builds, ci_gates, security_gates, protected_release_workflow, release_registry, timeline_projection, startup_guards, commands, checklists, runbooks]
+  external_evidence_required: [terraform_plan_apply, preview_deploy, staging_deploy, production_deploy, image_signing, full_e2e, dast, penetration_test, load_run, backup_restore, disaster_recovery_drill, live_payment_approval, legal_review, manual_accessibility]
+deferred_work: [multi_region_active_active, production_status_page_provider, external_penetration_test, live_financial_pilot, real_dns_and_certificate_values]
+conflicts: []

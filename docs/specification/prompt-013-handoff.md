@@ -1,0 +1,5 @@
+# Prompt 013 coverage handoff — public website
+
+Prompt 013 owns complete public marketing content, not the shell. Implement homepage sections and public routes for Robot Owners, Hiring Companies, Robot Manufacturers, pricing, trust and verification, Republic, Med Pool, the shared Nation Reserve account, support, contact, privacy, terms, accessibility, and status. Explain verified operating time, heartbeat evidence, separate charges/earnings, and all calls to action without guarantees.
+
+Reuse `PublicShell`, semantic tokens, service explanations, financial terminology, page states, formatters, and responsive/accessibility conventions. Complete per-route SEO titles/descriptions/canonical metadata and index policy. Test keyboard/mobile navigation, external-product disclosure, pricing source configuration, contrast, headings, forms, failure states, and representative widths. Open source gaps: final Republic/Med Pool destination URLs, approved legal copy, production contact channels, and published pricing configuration endpoint.

@@ -1,0 +1,20 @@
+schemaVersion: "1.0.0"
+appendix_id: APP-O
+title: Unified Activity Timeline System
+canonical_location: between_prompt_018_and_prompt_019
+supersedes: all_earlier_timeline_drafts
+referenced_by_prompts: [PROMPT-019, PROMPT-020, PROMPT-021, PROMPT-022, PROMPT-023]
+authoritative_document: docs/appendix-o-unified-activity-timeline.md
+developer_compliance:
+  rule: "No entity, workflow, feature, API, worker, financial event, notification, deployment, migration, release, acceptance run, or operational process is complete until its lifecycle events integrate with Appendix O."
+  intentional_omission_requires: approved_timeline_compliance_exception
+required_event_fields: [timeline_event_id, timestamp_utc, display_timestamp, event_type, category, summary, expanded_description, actor, actor_organization, actor_role, target_entity, target_entity_type, related_objects, current_status, previous_status, metadata, attachments, source_system, correlation_id]
+required_capabilities: [chronological_order, immutability, automatic_projection, permission_scoping, search, filtering, export, related_navigation, pagination, lazy_loading, retention]
+exports: [csv, pdf, json, print]
+required_tests: [event_generation, ordering, permissions, related_links, filtering, exports, duplicate_prevention, queue_interruption_recovery]
+implementation:
+  database_migrations: [0014_unified_activity_timeline.sql, 0020_canonical_appendix_o.sql]
+  api: [/api/v1/organizations/:organizationId/activity, /api/v1/activity]
+  frontend: apps/web/src/ActivityTimeline.tsx
+  projection_source: outbox_events
+  audit_is_separate: true

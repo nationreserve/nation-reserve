@@ -1,0 +1,264 @@
+{
+  "schemaVersion": "1.0.0",
+  "promptId": "PROMPT-022",
+  "startedAt": "2026-08-10T18:16:36.126Z",
+  "completedAt": "2026-08-10T18:34:49.801Z",
+  "status": "blocked",
+  "fixture": false,
+  "stages": [
+    {
+      "id": "specification-validation",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 17784,
+      "output": "[WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n.                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n{\"valid\":true,\"issues\":74,\"critical\":36}\n\n$ corepack pnpm --filter @nation-reserve/specification validate\n$ tsx src/cli.ts validate\n"
+    },
+    {
+      "id": "strict-specification-coverage",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 18674,
+      "output": "[WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n.                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n{\"report\":\"docs/specification/coverage-report.md\",\"issues\":74,\"critical\":36}\nC:\\Users\\asus\\OneDrive\\Documents\\nation reserve\\packages\\specification:\r\n[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @nation-reserve/specification@0.1.0 coverage:strict: `tsx src/cli.ts coverage-strict`\nExit status 1\n[ELIFECYCLE] Command failed with exit code 1.\n\n$ corepack pnpm --filter @nation-reserve/specification coverage:strict\n$ tsx src/cli.ts coverage-strict\n"
+    },
+    {
+      "id": "migration-plan",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 532,
+      "output": "{\n  \"generatedAt\": \"2026-08-10T18:17:13.055Z\",\n  \"migrationCount\": 26,\n  \"items\": [\n    {\n      \"filename\": \"0001_core_domain.sql\",\n      \"sha256\": \"6f22315ba698b43f593f21a5247949e1f6ef841e4d8d0c2542da5016201b31ce\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0002_authentication_and_access.sql\",\n      \"sha256\": \"3d0859d69216f423a217a14b5de0e6f7d7d421fd4014872f851f164df2034b80\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0003_manufacturer_robot_activation.sql\",\n      \"sha256\": \"1a97d7b080c0014e94e8689c6b589b346e702bf3a123cd722c59a42287a4edf3\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0004_contract_scheduling_allocation.sql\",\n      \"sha256\": \"078d35a061af4d8849e377e89b6c5c1fa6ce76d08868c1f1d722dd859efaf183\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0005_contract_version_mutability.sql\",\n      \"sha256\": \"1078d9732783092c7ecf634facb89e2fdc63eb4d6e83feba152b1b6d30896791\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0006_production_heartbeat_operating_time.sql\",\n      \"sha256\": \"acc6780606c741f83e56b6f8a90b0bfb5ca004eba4ee33f827fc58f8ab670830\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0007_financial_ledger_billing_settlement.sql\",\n      \"sha256\": \"d6f633511ea0faaddf8864dc987ec4a995aba6c5b0d74abcfaf03bc1f11ddae0\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0008_payment_execution_webhooks.sql\",\n      \"sha256\": \"495c257a72aaba86c4b310270e03bbe3e198b9eada806654110e501e440816c1\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0009_payment_operations_completion.sql\",\n      \"sha256\": \"2abd52e171e04b7e46cb5b1177665a702da6f5ce710c3ca91563f6013c967b86\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0010_platform_operations_control_plane.sql\",\n      \"sha256\": \"2f2200db5b6b8555c374b933c08cd73491f3d6fe118765d060dae4de7f0692ed\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0011_outbox_metadata_default.sql\",\n      \"sha256\": \"21c339af1f561c894264077895320459ac6e8fe41d8a007ca2bf195b34fde13a\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0012_reporting_analytics_warehouse.sql\",\n      \"sha256\": \"dfe16706fb56921f7fd2a34470656a61060c431a1b98ff1dea59144cc00a5c61\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0013_specification_traceability.sql\",\n      \"sha256\": \"86ea7eb52f7fa9e2ed7c6b8e0d78f7bc232ed0c83e9ebac4de5617295a8c6799\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0014_unified_activity_timeline.sql\",\n      \"sha256\": \"272daa642905d0d0ad8271def5a66c1b7e9708423ca9c4e26662e75ee57a0ea3\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0015_backend_platform_services.sql\",\n      \"sha256\": \"91492d407a77583ca05a45c9bce934001ed75190eb95605bca09a7768b99e3bd\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0016_backend_permissions_and_notification_projection.sql\",\n      \"sha256\": \"5b15083524ae70e6f3edcf6862cd7250074b83be68f9f404e573d9f361d96351\",\n      \"risk\": \"low_risk\",\n      \"requiresBackup\": false,\n      \"requiresApproval\": false\n    },\n    {\n      \"filename\": \"0017_portal_domain_resources.sql\",\n      \"sha256\": \"1fad60ec31b01fcf0601ef5580b3f217c4afacd76704bfbb2b642f55a387282f\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0018_conversation_audiences.sql\",\n      \"sha256\": \"d92e0cfccdd46de5dda1162352982cfa8c1310d8ab6762c9c8fca7e75829cd57\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0019_event_audit_and_conversation_backfill.sql\",\n      \"sha256\": \"c96f21de40f1c479a05e08c300d65266f4c4f6a1319e2bd1ef3131e775948085\",\n      \"risk\": \"low_risk\",\n      \"requiresBackup\": false,\n      \"requiresApproval\": false\n    },\n    {\n      \"filename\": \"0020_canonical_appendix_o.sql\",\n      \"sha256\": \"d824269642e4529949f0c248672b3faf34815d0d2a13732c0bcc289704fb1430\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0021_canonical_timeline_projection.sql\",\n      \"sha256\": \"6e7c9a1c13f8ba44a06d6d07c481f618756d42bbb84efca10d650cc4e85b9ac1\",\n      \"risk\": \"low_risk\",\n      \"requiresBackup\": false,\n      \"requiresApproval\": false\n    },\n    {\n      \"filename\": \"0022_production_reliability.sql\",\n      \"sha256\": \"8f636a0daff9c3793405fee50249feda08bebed5a72245f8357252df9e8c6d3d\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0023_large_uploads_and_operational_timeline.sql\",\n      \"sha256\": \"37c5719dc0fee4e580a9d6db099c8334fcbcabc55c8d199b8d516157539db08f\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0024_release_deployment_registry.sql\",\n      \"sha256\": \"441cd55b57c01b94e26e56a74b28233e51be3980d1bdd89f46a5873853609a72\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    },\n    {\n      \"filename\": \"0025_release_event_names.sql\",\n      \"sha256\": \"d7986f5afa6e9453b180b08f08c210ee19bb025d249d9acdba38f7deda0dd864\",\n      \"risk\": \"low_risk\",\n      \"requiresBackup\": false,\n      \"requiresApproval\": false\n    },\n    {\n      \"filename\": \"0026_platform_acceptance.sql\",\n      \"sha256\": \"eb7890dc2156e40432404093ca8273c670e9d0f2d6b3c1e37c126128f8c53ba0\",\n      \"risk\": \"high_risk\",\n      \"requiresBackup\": true,\n      \"requiresApproval\": true\n    }\n  ]\n}\n\n"
+    },
+    {
+      "id": "unit-and-integration-tests",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 264540,
+      "output": ".                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\nScope: 22 of 25 workspace projects\npackages/analytics test$ vitest run\npackages/config test$ vitest run\npackages/config test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/config\npackages/analytics test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/analytics\npackages/analytics test:  Test Files  2 passed (2)\npackages/analytics test:       Tests  4 passed (4)\npackages/analytics test:    Start at  14:17:25\npackages/analytics test:    Duration  5.74s (transform 278ms, setup 0ms, import 785ms, tests 52ms, environment 1ms)\npackages/analytics test: Done\npackages/contracts test$ vitest run\npackages/config test:  Test Files  2 passed (2)\npackages/config test:       Tests  9 passed (9)\npackages/config test:    Start at  14:17:24\npackages/config test:    Duration  7.54s (transform 492ms, setup 0ms, import 2.59s, tests 117ms, environment 2ms)\npackages/config test: Done\npackages/design-system test$ vitest run\npackages/contracts test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/contracts\npackages/design-system test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/design-system\npackages/contracts test:  Test Files  1 passed (1)\npackages/contracts test:       Tests  2 passed (2)\npackages/contracts test:    Start at  14:17:35\npackages/contracts test:    Duration  5.85s (transform 873ms, setup 0ms, import 1.90s, tests 46ms, environment 1ms)\npackages/contracts test: Done\npackages/financial-domain test$ vitest run\npackages/financial-domain test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/financial-domain\npackages/financial-domain test:  Test Files  2 passed (2)\npackages/financial-domain test:       Tests  6 passed (6)\npackages/financial-domain test:    Start at  14:17:48\npackages/financial-domain test:    Duration  7.24s (transform 497ms, setup 0ms, import 1.15s, tests 123ms, environment 5ms)\npackages/financial-domain test: Done\npackages/forecasting test$ vitest run\npackages/forecasting test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/forecasting\npackages/forecasting test:  Test Files  2 passed (2)\npackages/forecasting test:       Tests  4 passed (4)\npackages/forecasting test:    Start at  14:18:01\npackages/forecasting test:    Duration  5.93s (transform 736ms, setup 0ms, import 995ms, tests 107ms, environment 1ms)\npackages/forecasting test: Done\npackages/heartbeat-domain test$ vitest run\npackages/heartbeat-domain test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/heartbeat-domain\npackages/heartbeat-domain test:  Test Files  2 passed (2)\npackages/heartbeat-domain test:       Tests  4 passed (4)\npackages/heartbeat-domain test:    Start at  14:18:12\npackages/heartbeat-domain test:    Duration  10.47s (transform 576ms, setup 0ms, import 3.89s, tests 197ms, environment 18ms)\npackages/heartbeat-domain test: Done\npackages/logger test$ vitest run --passWithNoTests\npackages/logger test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/logger\npackages/logger test: No test files found, exiting with code 0\npackages/logger test: include: **/*.{test,spec}.?(c|m)[jt]s?(x)\npackages/logger test: exclude:  **/node_modules/**, **/.git/**\npackages/logger test: Done\npackages/operations test$ vitest run\npackages/operations test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/operations\npackages/design-system test:  Test Files  2 passed (2)\npackages/design-system test:       Tests  8 passed (8)\npackages/design-system test:    Start at  14:17:37\npackages/design-system test:    Duration  61.78s (transform 1.63s, setup 0ms, import 12.88s, tests 5.14s, environment 37.87s)\npackages/design-system test: Done\npackages/payments test$ vitest run\npackages/payments test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/payments\npackages/operations test:  Test Files  2 passed (2)\npackages/operations test:       Tests  8 passed (8)\npackages/operations test:    Start at  14:18:37\npackages/operations test:    Duration  9.18s (transform 430ms, setup 0ms, import 3.19s, tests 149ms, environment 1ms)\npackages/operations test: Done\npackages/reporting test$ vitest run\npackages/reporting test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/reporting\npackages/payments test:  Test Files  2 passed (2)\npackages/payments test:       Tests  14 passed (14)\npackages/payments test:    Start at  14:18:45\npackages/payments test:    Duration  8.44s (transform 613ms, setup 0ms, import 3.92s, tests 296ms, environment 1ms)\npackages/payments test: Done\npackages/reporting-exports test$ vitest run\npackages/reporting-exports test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/reporting-exports\npackages/reporting test:  Test Files  2 passed (2)\npackages/reporting test:       Tests  4 passed (4)\npackages/reporting test:    Start at  14:18:50\npackages/reporting test:    Duration  8.57s (transform 504ms, setup 0ms, import 3.62s, tests 97ms, environment 1ms)\npackages/reporting test: Done\npackages/specification test$ vitest run\npackages/specification test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/specification\npackages/reporting-exports test:  Test Files  2 passed (2)\npackages/reporting-exports test:       Tests  4 passed (4)\npackages/reporting-exports test:    Start at  14:18:58\npackages/reporting-exports test:    Duration  24.80s (transform 689ms, setup 0ms, import 17.35s, tests 1.32s, environment 1ms)\npackages/reporting-exports test: Done\npackages/types test$ vitest run --passWithNoTests\npackages/types test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/types\npackages/types test: No test files found, exiting with code 0\npackages/types test: include: **/*.{test,spec}.?(c|m)[jt]s?(x)\npackages/types test: exclude:  **/node_modules/**, **/.git/**\npackages/specification test:  Test Files  2 passed (2)\npackages/specification test:       Tests  8 passed (8)\npackages/specification test:    Start at  14:19:04\npackages/specification test:    Duration  25.63s (transform 1.18s, setup 0ms, import 5.87s, tests 14.79s, environment 1ms)\npackages/types test: Done\npackages/warehouse test$ vitest run\npackages/specification test: Done\npackages/warehouse test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/warehouse\npackages/warehouse test:  Test Files  2 passed (2)\npackages/warehouse test:       Tests  2 passed (2)\npackages/warehouse test:    Start at  14:19:36\npackages/warehouse test:    Duration  5.95s (transform 413ms, setup 0ms, import 712ms, tests 59ms, environment 2ms)\npackages/warehouse test: Done\npackages/application-shell test$ vitest run\npackages/backend-core test$ vitest run\npackages/application-shell test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/application-shell\npackages/backend-core test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/backend-core\npackages/backend-core test:  Test Files  1 passed (1)\npackages/backend-core test:       Tests  4 passed (4)\npackages/backend-core test:    Start at  14:19:47\npackages/backend-core test:    Duration  3.22s (transform 511ms, setup 0ms, import 873ms, tests 50ms, environment 2ms)\npackages/backend-core test: Done\npackages/domain test$ vitest run\npackages/domain test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/domain\npackages/domain test:  Test Files  1 passed (1)\npackages/domain test:       Tests  4 passed (4)\npackages/domain test:    Start at  14:19:55\npackages/domain test:    Duration  6.32s (transform 934ms, setup 0ms, import 2.92s, tests 35ms, environment 1ms)\npackages/domain test: Done\npackages/application-shell test:  Test Files  2 passed (2)\npackages/application-shell test:       Tests  10 passed (10)\npackages/application-shell test:    Start at  14:19:46\npackages/application-shell test:    Duration  50.39s (transform 1.93s, setup 0ms, import 10.01s, tests 5.03s, environment 30.64s)\npackages/application-shell test: Done\npackages/auth test$ vitest run\npackages/contract-operations test$ vitest run\npackages/contract-operations test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/contract-operations\npackages/auth test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/auth\npackages/contract-operations test:  Test Files  1 passed (1)\npackages/contract-operations test:       Tests  2 passed (2)\npackages/contract-operations test:    Start at  14:20:42\npackages/contract-operations test:    Duration  4.22s (transform 625ms, setup 0ms, import 1.71s, tests 157ms, environment 1ms)\npackages/contract-operations test: Done\npackages/robot-integration test$ vitest run\npackages/auth test:  Test Files  1 passed (1)\npackages/auth test:       Tests  5 passed (5)\npackages/auth test:    Start at  14:20:42\npackages/auth test:    Duration  8.80s (transform 841ms, setup 0ms, import 3.98s, tests 2.74s, environment 1ms)\npackages/auth test: Done\npackages/robot-integration test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/robot-integration\npackages/robot-integration test:  Test Files  1 passed (1)\npackages/robot-integration test:       Tests  4 passed (4)\npackages/robot-integration test:    Start at  14:20:53\npackages/robot-integration test:    Duration  5.61s (transform 2.31s, setup 0ms, import 3.50s, tests 51ms, environment 1ms)\npackages/robot-integration test: Done\npackages/database test$ vitest run\npackages/database test:  RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/packages/database\npackages/database test:  Test Files  10 passed | 2 skipped (12)\npackages/database test:       Tests  15 passed | 5 skipped (20)\npackages/database test:    Start at  14:21:03\npackages/database test:    Duration  34.18s (transform 4.18s, setup 0ms, import 9.33s, tests 626ms, environment 9ms)\npackages/database test: Done\n\n"
+    },
+    {
+      "id": "authorization-and-api-tests",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 62585,
+      "output": ".                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n\n RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/apps/api\n\n\n Test Files  8 passed (8)\n      Tests  19 passed (19)\n   Start at  14:21:46\n   Duration  53.25s (transform 7.42s, setup 0ms, import 26.55s, tests 11.58s, environment 4ms)\n\n\n$ vitest run\n"
+    },
+    {
+      "id": "frontend-tests",
+      "status": "blocked",
+      "exitCode": null,
+      "durationMs": 300042,
+      "output": "[WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n.                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n\n RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/apps/web\n\n\n$ corepack pnpm --filter @nation-reserve/web test\n$ vitest run\n",
+      "error": "spawnSync C:\\WINDOWS\\system32\\cmd.exe ETIMEDOUT"
+    },
+    {
+      "id": "accessibility-tests",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 53376,
+      "output": ".                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n\n RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/apps/web\n\n\n Test Files  1 passed (1)\n      Tests  2 passed (2)\n   Start at  14:27:56\n   Duration  37.15s (transform 1.73s, setup 5.69s, import 1.48s, tests 4.12s, environment 23.49s)\n\n\n$ vitest run src/Prompt012.accessibility.test.tsx\n"
+    },
+    {
+      "id": "critical-journeys",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 48388,
+      "output": ".                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n\n RUN  v4.1.10 C:/Users/asus/OneDrive/Documents/nation reserve/apps/web\n\n\n Test Files  1 passed (1)\n      Tests  2 passed (2)\n   Start at  14:28:46\n   Duration  35.12s (transform 3.56s, setup 6.21s, import 3.62s, tests 2.85s, environment 18.60s)\n\n\n$ vitest run src/Prompt012.shell.test.tsx\n"
+    },
+    {
+      "id": "heartbeat-simulator",
+      "status": "failed",
+      "exitCode": 1,
+      "durationMs": 18832,
+      "output": ".                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\nC:\\Users\\asus\\OneDrive\\Documents\\nation reserve\\packages\\heartbeat-domain:\r\n[ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL] @nation-reserve/heartbeat-domain@0.1.0 simulate: `tsx src/simulator.ts`\nExit status 1\n\n$ tsx src/simulator.ts\nC:\\Users\\asus\\OneDrive\\Documents\\nation reserve\\packages\\heartbeat-domain\\src\\simulator.ts:6\r\nconst required=(name:string)=>{const value=process.env[name];if(!value)throw new Error(`${name} is required`);return value;};\r\n                                                                             ^\r\n\r\nError: HEARTBEAT_SIMULATOR_SECRET is required\r\n    at required (C:\\Users\\asus\\OneDrive\\Documents\\nation reserve\\packages\\heartbeat-domain\\src\\simulator.ts:6:78)\r\n    at <anonymous> (C:\\Users\\asus\\OneDrive\\Documents\\nation reserve\\packages\\heartbeat-domain\\src\\simulator.ts:8:14)\r\n    at ModuleJob.run (node:internal/modules/esm/module_job:439:25)\r\n    at async node:internal/modules/esm/loader:643:26\r\n    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)\r\n\r\nNode.js v24.18.0\r\n"
+    },
+    {
+      "id": "security-source-audit",
+      "status": "passed",
+      "exitCode": 0,
+      "durationMs": 4772,
+      "output": "Source security fixture scan passed.\n\n"
+    },
+    {
+      "id": "build",
+      "status": "blocked",
+      "exitCode": null,
+      "durationMs": 300037,
+      "output": "[WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\n.                                        | [WARN] Unsupported engine: wanted: {\"node\":\">=22 <23\"} (current: {\"node\":\"v24.18.0\",\"pnpm\":\"11.17.0\"})\nScope: 24 of 25 workspace projects\npackages/analytics build$ tsc -p tsconfig.json\npackages/config build$ tsc -p tsconfig.json\npackages/config build: Done\npackages/contracts build$ tsc -p tsconfig.json\npackages/analytics build: Done\npackages/design-system build$ tsc -b\npackages/design-system build: Done\npackages/financial-domain build$ tsc -p tsconfig.json\npackages/contracts build: Done\npackages/forecasting build$ tsc -p tsconfig.json\npackages/financial-domain build: Done\npackages/heartbeat-domain build$ tsc -p tsconfig.json\npackages/forecasting build: Done\npackages/logger build$ tsc -p tsconfig.json\npackages/logger build: Done\npackages/operations build$ tsc -p tsconfig.json\npackages/heartbeat-domain build: Done\npackages/payments build$ tsc -p tsconfig.json\npackages/operations build: Done\npackages/reporting build$ tsc -p tsconfig.json\npackages/payments build: Done\npackages/reporting-exports build$ tsc -p tsconfig.json\npackages/reporting build: Done\npackages/specification build$ tsc -p tsconfig.json\npackages/reporting-exports build: Done\npackages/types build$ tsc -p tsconfig.json\npackages/types build: Done\npackages/warehouse build$ tsc -p tsconfig.json\npackages/specification build: Done\npackages/warehouse build: Done\npackages/application-shell build$ tsc -b\npackages/backend-core build$ tsc -p tsconfig.json\npackages/application-shell build: Done\npackages/domain build$ tsc -p tsconfig.json\npackages/backend-core build: Done\npackages/domain build: Done\napps/web build$ tsc -b && vite build\npackages/auth build$ tsc -p tsconfig.json\npackages/auth build: Done\npackages/contract-operations build$ tsc -p tsconfig.json\npackages/contract-operations build: Done\npackages/robot-integration build$ tsc -p tsconfig.json\npackages/robot-integration build: Done\napps/web build: \u001b[36mvite v8.2.0 \u001b[32mbuilding client environment for production...\u001b[36m\u001b[39m\napps/web build: \u001b[2K\napps/web build: transforming...✓ 46 modules transformed.\napps/web build: rendering chunks...\napps/web build: computing gzip size...\napps/web build: dist/index.html                   0.52 kB │ gzip:   0.32 kB\napps/web build: dist/assets/index-CDwV8qYN.css   32.21 kB │ gzip:   6.64 kB\napps/web build: dist/assets/index-B-JQ86z4.js   421.63 kB │ gzip: 114.99 kB\napps/web build: \u001b[32m✓ built in 2.58s\u001b[39m\napps/web build: Done\npackages/database build$ tsc -p tsconfig.json\n\n$ corepack pnpm -r run build\n",
+      "error": "spawnSync C:\\WINDOWS\\system32\\cmd.exe ETIMEDOUT"
+    }
+  ],
+  "placeholderFindings": [
+    {
+      "file": "apps/web/src/AcceptancePage.test.tsx",
+      "line": 3,
+      "excerpt": "vi.mock(\"./auth-client.js\", () => ({ api: { get: vi.fn((path: string) => Promise.resolve(path.endsWith(\"overview\") ? { launch_blockers: 3, open_gaps: 5, active_waivers: 0, last_run: { status: \"blocked\", started_at: \"2026-08-04T00:00:00Z\" } "
+    },
+    {
+      "file": "apps/web/src/CompanyPages.accessibility.test.tsx",
+      "line": 5,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn().mockResolvedValue({items:[]}),post:vi.fn()}}));afterEach(()=>cleanup());"
+    },
+    {
+      "file": "apps/web/src/CompanyPages.responsive.test.tsx",
+      "line": 5,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn().mockResolvedValue({items:[]}),post:vi.fn()}}));afterEach(()=>cleanup());"
+    },
+    {
+      "file": "apps/web/src/CompanyPages.test.tsx",
+      "line": 5,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn(),post:vi.fn()}}));"
+    },
+    {
+      "file": "apps/web/src/CompanyPages.tsx",
+      "line": 22,
+      "excerpt": "function StructuredResource({kind,path}:{kind:keyof typeof resourceInfo;path:string}){const info=resourceInfo[kind]!,id=path.match(new RegExp(`/company/${kind}/([^/]+)`))?.[1],isForm=path.endsWith(\"/new\")||path.endsWith(\"/edit\"),state=useLo"
+    },
+    {
+      "file": "apps/web/src/CompanyPages.tsx",
+      "line": 25,
+      "excerpt": "function JobBuilder({path}:{path:string}){const section=path.split(\"/\").at(-1)??\"overview\";const groups=[\"Primary responsibilities\",\"Secondary responsibilities\",\"Conditional responsibilities\",\"Prohibited activities\",\"Human supervision\",\"Sta"
+    },
+    {
+      "file": "apps/web/src/CompanyPages.tsx",
+      "line": 26,
+      "excerpt": "function Training({path}:{path:string}){const equipment=path.includes(\"equipment\"),uploads=path.includes(\"uploads\"),packages=path.includes(\"packages\"),sessions=path.includes(\"sessions\"),title=equipment?\"Motion-training equipment\":uploads?\"T"
+    },
+    {
+      "file": "apps/web/src/CompanyPages.tsx",
+      "line": 28,
+      "excerpt": "function Sourcing({path}:{path:string}){const messages=path.includes(\"messages\")||path.includes(\"conversations\"),manufacturer=path.includes(\"manufacturers\"),opportunity=path.includes(\"opportunities\");return <Page title={messages?\"Private ma"
+    },
+    {
+      "file": "apps/web/src/ManufacturerPages.responsive.test.tsx",
+      "line": 2,
+      "excerpt": "import{afterEach,describe,expect,it,vi}from\"vitest\";import{cleanup,render,screen}from\"@testing-library/react\";import{ManufacturerPage}from\"./ManufacturerPages.js\";vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn().mockResolvedValue({items:[]"
+    },
+    {
+      "file": "apps/web/src/ManufacturerPages.test.tsx",
+      "line": 2,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn(),post:vi.fn()}}));beforeEach(()=>{sessionStorage.setItem(\"nr-active-organization\",\"00000000-0000-4000-8000-000000000017\");vi.mocked(api.get).mockResolvedValue({items:[]})});afterEach(()=>{cle"
+    },
+    {
+      "file": "apps/web/src/ManufacturerPages.tsx",
+      "line": 16,
+      "excerpt": "function WorkOrders({path}:{path:string}){const id=path.match(/\\/work-orders\\/([^/]+)/)?.[1],action=path.split(\"/\").at(-1);return <Page title={id&&!['map','saved'].includes(id)?\"Open work-order detail\":\"Open work-order discovery\"} descripti"
+    },
+    {
+      "file": "apps/web/src/ManufacturerPages.tsx",
+      "line": 18,
+      "excerpt": "function Messaging({path}:{path:string}){return <Page title={path.includes(\"contracts\")?\"Contract participant messages\":\"Private company conversations\"} description=\"Authorized private communication with explicit participant visibility.\"><G"
+    },
+    {
+      "file": "apps/web/src/OwnerPages.accessibility.test.tsx",
+      "line": 6,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn(),post:vi.fn()}}));"
+    },
+    {
+      "file": "apps/web/src/OwnerPages.responsive.test.tsx",
+      "line": 5,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn().mockResolvedValue({items:[]}),post:vi.fn()}}));"
+    },
+    {
+      "file": "apps/web/src/OwnerPages.test.tsx",
+      "line": 5,
+      "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn(),post:vi.fn()}}));"
+    },
+    {
+      "file": "apps/web/src/OwnerPages.tsx",
+      "line": 20,
+      "excerpt": "function Dashboard(){const id=org(),state=useData(id?`/api/v1/organizations/${id}/earnings/summary`:undefined),v=object(state.data);return <Page title=\"Robot Owner dashboard\" description=\"Robots, verified operation, earnings readiness, and "
+    },
+    {
+      "file": "apps/web/src/OwnerPages.tsx",
+      "line": 21,
+      "excerpt": "function Robots(){return <Page title=\"Robots\" description=\"The central inventory for robots owned by the active organization.\"><div className=\"owner-toolbar\"><input aria-label=\"Search by serial number\" placeholder=\"Search serial number\"/><s"
+    },
+    {
+      "file": "apps/web/src/PublicPages.tsx",
+      "line": 51,
+      "excerpt": "function FAQ(){const[query,setQuery]=useState(\"\");const filtered=faqs.filter(x=>x.join(\" \").toLowerCase().includes(query.toLowerCase()));return <Page meta={{title:\"RoboWorkPool FAQ\",description:\"Search answers about ownership, hiring, manuf"
+    },
+    {
+      "file": "apps/web/src/PublicPages.tsx",
+      "line": 53,
+      "excerpt": "function ProductPage({product}:{product:\"republic\"|\"med\"}){const republic=product===\"republic\";const title=republic?\"Republic\":\"Med Pool\";return <Page meta={{title,description:republic?\"Learn how Republic is separate from RoboWorkPool withi"
+    },
+    {
+      "file": "apps/web/src/PublicPages.tsx",
+      "line": 58,
+      "excerpt": "function Status(){const services=[\"Web application\",\"Client API\",\"Manufacturer API\",\"Heartbeat ingestion\",\"Authentication\",\"Billing\",\"Notifications\",\"Documentation\"];return <Page meta={{title:\"Service status\",description:\"View the public av"
+    },
+    {
+      "file": "packages/specification/src/validator.ts",
+      "line": 13,
+      "excerpt": "const publicPages=(bundle.registries[\"public-website\"] as{items?:Array<{route:string;status:string}>}).items??[];for(const page of publicPages)if(page.status===\"planned\")issues.push(issue(\"SPEC_SCREEN_NOT_FULLY_DEFINED\",page.route===\"/\"?\"cr"
+    },
+    {
+      "file": "scripts/acceptance/inventory.mjs",
+      "line": 13,
+      "excerpt": "const inventory=files.map(p=>{let content=\"\";try{content=readFileSync(p,\"utf8\");}catch{}const rel=relative(root,p).replaceAll(\"\\\\\",\"/\");return{path:rel,kind:kind(rel),domain:domain(rel),purpose:`Repository ${kind(rel).replaceAll(\"_\",\" \")} e"
+    },
+    {
+      "file": "scripts/acceptance/mvp.mjs",
+      "line": 49,
+      "excerpt": "const marker = /\\b(TODO|FIXME|placeholder|mock|not implemented|coming soon|fake data)\\b/i;"
+    },
+    {
+      "file": "scripts/acceptance/mvp.mjs",
+      "line": 64,
+      "excerpt": "`## Placeholder findings\\n\\n${placeholderFindings.slice(0, 200).map((f) => `- \\`${f.file}:${f.line}\\` — ${f.excerpt}`).join(\"\\n\") || \"- None.\"}\\n`;"
+    },
+    {
+      "file": "scripts/release/validate-environment.mjs",
+      "line": 3,
+      "excerpt": "for(const key of Object.keys(process.env))if(/SECRET|TOKEN|PASSWORD|PRIVATE_KEY/.test(key)&&process.env[key]?.includes(\"change-me\"))throw new Error(`${key} contains a development placeholder`);console.log(`Environment ${env} passed isolatio"
+    },
+    {
+      "file": "scripts/security/verify-source.mjs",
+      "line": 1,
+      "excerpt": "import{readFile,readdir}from\"node:fs/promises\";import{join}from\"node:path\";const roots=[\"apps\",\"packages\",\"infrastructure\",\"scripts\"],findings=[];async function walk(path){for(const entry of await readdir(path,{withFileTypes:true})){if([\"no"
+    },
+    {
+      "file": "docs/appendix-i-website.md",
+      "line": 493,
+      "excerpt": "Do not display placeholder statistics in production."
+    },
+    {
+      "file": "docs/appendix-m-expanded-immutable-rules.md",
+      "line": 1189,
+      "excerpt": "## Rule M-084 — No Placeholder Production Statistics"
+    },
+    {
+      "file": "docs/appendix-m-expanded-immutable-rules.md",
+      "line": 1195,
+      "excerpt": "Placeholder or fabricated statistics must not appear in production."
+    },
+    {
+      "file": "docs/platform-integration-audit.md",
+      "line": 7,
+      "excerpt": "Placeholder scans are produced by `pnpm acceptance:mvp`. Matches are evidence for review; documentation using words such as “temporary” is not automatically a product stub. Primary workflow markers must be classified in the generated report"
+    },
+    {
+      "file": "docs/specification/user-explanations.yaml",
+      "line": 3,
+      "excerpt": "- {explanation_id: EXP-FIN-VERIFIED, audience: [public_visitor, robot_owner, hiring_company], topic: \"Verified operating pricing\", purpose: \"Separate verified operation from schedule and activation.\", required_message: \"Only verified operat"
+    }
+  ],
+  "blockers": [
+    {
+      "id": "stage:strict-specification-coverage",
+      "reason": "exit 1"
+    },
+    {
+      "id": "stage:frontend-tests",
+      "reason": "spawnSync C:\\WINDOWS\\system32\\cmd.exe ETIMEDOUT"
+    },
+    {
+      "id": "stage:heartbeat-simulator",
+      "reason": "exit 1"
+    },
+    {
+      "id": "stage:build",
+      "reason": "spawnSync C:\\WINDOWS\\system32\\cmd.exe ETIMEDOUT"
+    }
+  ]
+}

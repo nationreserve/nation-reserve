@@ -1,0 +1,3 @@
+import{describe,expect,it}from"vitest";import{csvExport,pdfExport,xlsxExport,type ExportMetadata}from"./index.js";
+const metadata:ExportMetadata={generatedAt:"2026-01-01T00:00:00.000Z",timezone:"UTC",organization:"Example",reportVersion:1,filters:{status:"active"}};
+describe("report exports",()=>{it("creates metadata-rich CSV",()=>expect(csvExport([{value:5}],metadata).toString()).toContain("# timezone=UTC"));it("creates genuine XLSX and PDF files",async()=>{const xlsx=await xlsxExport([{value:5}],metadata),pdf=await pdfExport("Report",[{value:5}],metadata);expect(xlsx.subarray(0,2).toString()).toBe("PK");expect(pdf.subarray(0,4).toString()).toBe("%PDF");});});

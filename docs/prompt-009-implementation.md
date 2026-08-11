@@ -1,0 +1,5 @@
+# Prompt 009 implementation
+
+Prompt 009 adds the operational control plane: corrected platform-role assignments, granular permissions, single-use step-up grants, cached flags with version history, validated centralized configuration, maintenance windows, announcements, background job/run administration, worker heartbeats, incidents and links, alerts, safe diagnostics, dashboard/search, health, metrics, audit export, responsive Operations Center pages, tests, and fixtures.
+
+Operational controls do not edit posted financial records or bypass earlier business invariants. The existing heartbeat-offline and financial-finalization workers now publish job runs and process heartbeats; API request metrics are exposed with the database-backed gauges; and new alerts publish through the transactional outbox. Production deployment still requires real PostgreSQL migration execution, a metrics scraper/dashboard, a scheduler for `pnpm operations:evaluate-alerts`, and an outbox consumer configured for the chosen alert destination.

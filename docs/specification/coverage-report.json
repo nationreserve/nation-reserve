@@ -1,0 +1,383 @@
+{
+  "schemaVersion": "1.0.0",
+  "generatedAt": "2026-08-10T19:59:23.162Z",
+  "dimensions": {
+    "source": {
+      "total": 34,
+      "present": 30
+    },
+    "requirements": {
+      "total": 41,
+      "verified": 23
+    },
+    "immutable_rules": {
+      "total": 6,
+      "tested": 6
+    },
+    "screens": {
+      "total": 38,
+      "verified": 1
+    },
+    "traceability": {
+      "total": 41,
+      "mapped": 29
+    },
+    "tests": {
+      "mapped_requirements": 29
+    },
+    "issues": {
+      "high": 34,
+      "medium": 4
+    }
+  },
+  "requirementStatuses": {
+    "implemented_unverified": 4,
+    "not_started": 1,
+    "partially_implemented": 13,
+    "verified": 23
+  },
+  "issues": [
+    {
+      "issue_code": "SPEC_SCREEN_NOT_FULLY_DEFINED",
+      "severity": "high",
+      "category": "screen",
+      "message": "/company/operations is partially_specified.",
+      "resource_type": "screen",
+      "resource_id": "SCR-COMPANY-OPERATIONS",
+      "suggested_resolution": "Complete in assigned prompt."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_NOT_FULLY_DEFINED",
+      "severity": "high",
+      "category": "screen",
+      "message": "/owner/earnings is partially_specified.",
+      "resource_type": "screen",
+      "resource_id": "SCR-OWNER-EARNINGS",
+      "suggested_resolution": "Complete in assigned prompt."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-DELETE",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-NOTIFICATIONS",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-ORGANIZATIONS",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-OVERVIEW",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-PREFERENCES",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-PROFILE",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-SECURITY",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-ACCOUNT-SESSIONS",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-INVITATION",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-ORG-CREATE",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-REGISTER",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-REGISTER-SUCCESS",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-RESET",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-VERIFY-COMPLETE",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-AUTH-VERIFY-PENDING",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-AUTH",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-AUTHENTICATED",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-EMAIL-REQUIRED",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-ERROR",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-FEATURE-UNAVAILABLE",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-HELP",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-MAINTENANCE",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-NOT-FOUND",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-NOTIFICATIONS",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-ORG-REQUIRED",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-ORGANIZATION",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-PLATFORM",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-PUBLIC",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-RESTRICTED",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-SESSION-EXPIRED",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-STEP-UP",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SCREEN_PERMISSION_MISSING",
+      "severity": "high",
+      "category": "screen",
+      "message": "Authenticated screen has no permission.",
+      "resource_type": "screen",
+      "resource_id": "SCR-SHELL-USER-MENU",
+      "suggested_resolution": "Map backend permission."
+    },
+    {
+      "issue_code": "SPEC_SOURCE_MISSING",
+      "severity": "medium",
+      "category": "source",
+      "message": "Source listed but not found in repository. Manual import or file creation required.",
+      "resource_type": "source",
+      "resource_id": "VOL-I",
+      "suggested_resolution": "Manual import or file creation required."
+    },
+    {
+      "issue_code": "SPEC_SOURCE_MISSING",
+      "severity": "medium",
+      "category": "source",
+      "message": "Source listed but not found in repository. Manual import or file creation required.",
+      "resource_type": "source",
+      "resource_id": "VOL-II",
+      "suggested_resolution": "Manual import or file creation required."
+    },
+    {
+      "issue_code": "SPEC_SOURCE_MISSING",
+      "severity": "medium",
+      "category": "source",
+      "message": "Source listed but not found in repository. Manual import or file creation required.",
+      "resource_type": "source",
+      "resource_id": "VOL-III-A",
+      "suggested_resolution": "Manual import or file creation required."
+    },
+    {
+      "issue_code": "SPEC_SOURCE_MISSING",
+      "severity": "medium",
+      "category": "source",
+      "message": "Source listed but not found in repository. Manual import or file creation required.",
+      "resource_type": "source",
+      "resource_id": "VOL-IV",
+      "suggested_resolution": "Manual import or file creation required."
+    }
+  ]
+}

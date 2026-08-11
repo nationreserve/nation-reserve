@@ -1,0 +1,3 @@
+# Payment idempotency
+
+Provider mutations use stable business keys. Database uniqueness covers provider/environment/idempotency key and remote object IDs. Repeating a command returns the existing attempt and cannot create a second active invoice or statement attempt. A timeout is an unknown outcome and must be retrieved using the original provider object or idempotency scope; it must never be blindly resubmitted with a new key.

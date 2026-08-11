@@ -1,0 +1,8 @@
+prompt_id: PROMPT-017
+title: Complete Robot Manufacturer Portal and two-direction contract origination
+implementation_status: partially_implemented
+test_status: tests_present
+contract_origins: [company_private_invitation, company_open_work_order, manufacturer_discovered_work_order, manufacturer_direct_relationship, renewal, replacement_or_extension, platform_assisted]
+privacy: [company_controlled_disclosure, location_precision, recipient_isolation, response_isolation, training_grants, explicit_group_participants, secret_single_display]
+company_amendment_routes: [/company/work-orders, /company/work-orders/new, /company/work-orders/:workOrderId, /company/work-orders/:workOrderId/publication, /company/work-orders/:workOrderId/visibility, /company/work-orders/:workOrderId/manufacturer-interest, /company/work-orders/:workOrderId/inbound-messages, /company/work-orders/:workOrderId/access-requests]
+deferred_backend: [work_orders, visibility_rules, service_regions, location_matching, interest, contacts, access_grants, opportunity_conversion, contract_origin_storage, conversations, fulfillment_projections, scheduling_readiness, manufacturer_notifications]

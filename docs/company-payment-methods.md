@@ -1,0 +1,3 @@
+# Company payment methods
+
+The browser requests a SetupIntent client secret, completes hosted provider collection, and submits only the resulting payment-method ID. The server retrieves that ID from the provider, stores safe brand/last-four/expiry metadata, and updates the single default method transactionally. Full card numbers, CVV, routing numbers, bank account numbers, and client secrets are not stored.

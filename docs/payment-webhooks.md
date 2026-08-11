@@ -1,0 +1,3 @@
+# Payment webhooks
+
+`POST /api/v1/payment-webhooks/:provider` captures the exact request bytes before JSON parsing. Signatures and environment are verified before mutation. `(provider, environment, event ID)` is unique, so duplicate delivery is acknowledged without duplicate accounting. Terminal transitions have state guards and settlement-journal foreign keys. Unsupported events are retained as processed without changing financial state.

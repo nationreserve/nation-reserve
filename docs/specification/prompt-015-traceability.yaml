@@ -1,0 +1,43 @@
+prompt_id: PROMPT-015
+requirement_id: RWP-OWNER-0001
+title: Complete Robot Owner portal experience
+implementation_status: partially_implemented
+test_status: tested
+routes:
+  - /owner
+  - /owner/dashboard
+  - /owner/robots
+  - /owner/robots/new
+  - /owner/robots/:robotId
+  - /owner/ownership
+  - /owner/ownership/:claimId
+  - /owner/assignments
+  - /owner/assignments/:assignmentId
+  - /owner/operating-time
+  - /owner/operating-time/:intervalId
+  - /owner/earnings
+  - /owner/earnings/statements
+  - /owner/earnings/statements/:statementId
+  - /owner/earnings/holds
+  - /owner/earnings/disputes
+  - /owner/payouts
+  - /owner/payouts/setup
+  - /owner/payouts/history
+  - /owner/reports
+  - /owner/notifications
+  - /owner/settings
+implementation_files:
+  - apps/web/src/OwnerPages.tsx
+  - apps/web/src/owner-pages.css
+  - apps/web/src/OwnerPages.test.tsx
+  - apps/web/src/RootApp.tsx
+deferred_contracts:
+  - owner robot inventory
+  - owner ownership-claim list and detail
+  - owner assignment list
+  - owner-wide operating-time aggregate
+  - operating-interval detail
+  - owner notification feed
+  - owner robot availability mutation
+  - complete owner dashboard aggregate
+notes: The frontend exposes explicit API-required states and does not duplicate backend business rules.

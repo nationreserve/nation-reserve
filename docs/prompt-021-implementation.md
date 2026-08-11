@@ -1,0 +1,5 @@
+# Prompt 021 implementation
+
+Implemented in source: AWS ECS Terraform baseline and isolated environments; hardened role-specific containers; immutable release/migration/security registries with Appendix O projections; production startup guards; CI quality/specification/migration/accessibility gates; dependency, secret, container, SBOM and IaC gates; protected infrastructure/release workflows; release manifests; migration risk plans; smoke/environment/security/resilience scripts; deployment, secret, rotation, testing, recovery, rollback and launch documentation.
+
+Not executed or certified here: Terraform apply/plan against an AWS account, DNS/TLS issuance, image push/signing, preview/staging/production deployment, external SAST/DAST or penetration test, full critical E2E against deployed services, k6 staging load run, live Stripe approval/testing, heartbeat manufacturer certification, multipart large-file staging run, backup restore, regional DR drill, status-page/on-call configuration, legal approval, production launch or manual checklist. These remain blocking evidence.

@@ -1,0 +1,67 @@
+name: Production CI gates
+on:
+  pull_request:
+  push:
+    branches: [main, "release/**", "hotfix/**"]
+permissions: {contents: read, security-events: write}
+concurrency: {group: "ci-${{ github.ref }}", cancel-in-progress: true}
+jobs:
+  specification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 11.17.0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm specification:validate
+      - run: pnpm specification:coverage
+      - run: pnpm specification:sync
+      - if: github.ref == 'refs/heads/main'
+        run: pnpm specification:coverage:strict
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 11.17.0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm web:test:a11y
+      - run: pnpm build
+  migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: {POSTGRES_USER: test, POSTGRES_PASSWORD: test, POSTGRES_DB: test}
+        ports: ["5432:5432"]
+        options: --health-cmd="pg_isready -U test" --health-interval=5s --health-timeout=5s --health-retries=10
+    env: {DATABASE_URL: "postgresql://test:test@localhost:5432/test"}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: {version: 11.17.0}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: pnpm}
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:migrate
+      - run: pnpm test:integration
+  containers:
+    runs-on: ubuntu-latest
+    strategy: {matrix: {image: [api, web, worker, migration, scheduler]}}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with: {context: ., file: "infrastructure/docker/Dockerfile.${{ matrix.image }}", push: false, tags: "rwp-${{ matrix.image }}:${{ github.sha }}", build-args: "COMMIT_SHA=${{ github.sha }}"}
+      - uses: anchore/sbom-action@v0
+        with: {image: "rwp-${{ matrix.image }}:${{ github.sha }}", artifact-name: "sbom-${{ matrix.image }}.spdx.json"}
+      - uses: aquasecurity/trivy-action@0.28.0
+        with: {image-ref: "rwp-${{ matrix.image }}:${{ github.sha }}", severity: CRITICAL,HIGH, exit-code: "1", ignore-unfixed: true}

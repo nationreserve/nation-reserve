@@ -1,0 +1,3 @@
+# Payment reconciliation
+
+Reconciliation compares unknown or nonterminal internal attempts with authoritative provider retrieval, detects missing terminal webhooks and ledger entries, and applies only evidence-backed repairs through the same guarded settlement transition. It must never fabricate success. Exceptions include paid-without-evidence, success-without-journal, missing fees, stale connected accounts, and clearing mismatches.

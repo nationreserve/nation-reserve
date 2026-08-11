@@ -1,0 +1,9 @@
+prompt_id: PROMPT-016
+title: Complete Hiring Company Portal
+implementation_status: partially_implemented
+test_status: tests_present
+implemented_frontend: [dashboard, onboarding, facilities, work_areas, departments, workforce_plans, jobs, training, sourcing, messaging, contracts, assignments, schedules, live_operations, inactive_reports, replacements, verified_time, billing, invoices, payments, disputes, reports, notifications, team, settings, support]
+implemented_api_adapters: [contracts, assignment_detail, operational_status, billing_summary, invoices, payments, disputes, reporting]
+deferred_backend: [facilities, departments, work_areas, workforce_plans, job_versions, responsibility_tree, training_equipment, purchasing, connectors, calibration, capture, uploads, packages, training_access, manufacturer_directory, opportunities, responses, conversations, messages, scheduling, notifications]
+privacy_rules: [private_training_by_default, recipient_isolation, manufacturer_response_isolation, explicit_group_participants, organization_scoped_reads]
+handoff: docs/specification/prompt-017-handoff.md

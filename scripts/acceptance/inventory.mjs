@@ -1,0 +1,15 @@
+import { createHash } from "node:crypto";
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { extname, join, relative, resolve } from "node:path";
+const root=resolve(import.meta.dirname,"../.."); const out=join(root,"artifacts","acceptance");mkdirSync(out,{recursive:true});
+const roots=["apps","packages","scripts","infrastructure",".github","docs"];
+const ignored=new Set(["node_modules","dist",".git",".turbo","artifacts"]);const files=[];
+const walk=(dir)=>{for(const e of readdirSync(dir,{withFileTypes:true})){if(ignored.has(e.name))continue;const p=join(dir,e.name);e.isDirectory()?walk(p):files.push(p);}};
+for(const dir of roots)walk(join(root,dir));
+const domain=(p)=>p.includes("heartbeat")?"heartbeat":p.includes("financial")||p.includes("payment")?"finance":p.includes("contract")?"contracts":p.includes("specification")?"specification":p.includes("acceptance")?"acceptance":p.includes("web")?"frontend":p.includes("terraform")||p.includes(".github")?"delivery":"platform";
+const kind=(p)=>p.endsWith(".sql")?"database_migration":p.includes("test.")||p.endsWith(".test.ts")||p.endsWith(".test.tsx")?"test":p.endsWith(".md")?"documentation":p.endsWith(".yml")||p.endsWith(".yaml")?"configuration":p.endsWith(".tsx")?"frontend":p.endsWith(".ts")||p.endsWith(".mjs")?"code":"asset";
+const promptIds=(text)=>[...new Set(text.match(/PROMPT-\d{3}/gi)??[])].sort();
+const requirementIds=(text)=>[...new Set(text.match(/(?:RWP|REQ|IMM)-[A-Z0-9-]+/g)??[])].sort();
+const inventory=files.map(p=>{let content="";try{content=readFileSync(p,"utf8");}catch{}const rel=relative(root,p).replaceAll("\\","/");return{path:rel,kind:kind(rel),domain:domain(rel),purpose:`Repository ${kind(rel).replaceAll("_"," ")} evidence`,promptIds:promptIds(content),requirementIds:requirementIds(content),implementationStatus:/TODO|FIXME|not implemented|coming soon/i.test(content)?"requires_review":"present",testEvidence:kind(rel)==="test"?[rel]:[],knownGaps:[],duplicateOrConflict:false,sizeBytes:statSync(p).size,sha256:createHash("sha256").update(content).digest("hex")};});
+writeFileSync(join(out,"repository-evidence.json"),JSON.stringify({generatedAt:new Date().toISOString(),count:inventory.length,artifacts:inventory},null,2)+"\n");
+process.stdout.write(JSON.stringify({count:inventory.length,output:"artifacts/acceptance/repository-evidence.json"})+"\n");

@@ -1,0 +1,19 @@
+prompt_id: PROMPT-022
+visibility: platform_only
+events:
+  - acceptance.run.started
+  - acceptance.run.completed
+  - acceptance.run.failed
+  - acceptance.gap.detected
+  - acceptance.gap.resolved
+  - acceptance.waiver.requested
+  - acceptance.waiver.approved
+  - acceptance.waiver.expired
+  - acceptance.waiver.revoked
+  - acceptance.mvp.approved
+  - acceptance.mvp.rejected
+requirements:
+  automatic_outbox: true
+  permission_aware_timeline: true
+  immutable_audit_distinct: true
+  cross_organization_privacy_test_required: true

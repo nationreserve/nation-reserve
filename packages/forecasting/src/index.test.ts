@@ -1,0 +1,2 @@
+import{describe,expect,it}from"vitest";import{forecast}from"./index.js";
+describe("forecast",()=>{it("labels deterministic linear estimates",()=>{const result=forecast([10,20,30],2,"linear_trend");expect(result.label).toBe("Estimate based on historical data");expect(result.points.map(p=>p.value)).toEqual([40,50]);});it("supports moving averages",()=>expect(forecast([3,6,9],1,"moving_average").points[0]!.value).toBe(6));});
