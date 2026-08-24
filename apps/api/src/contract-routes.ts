@@ -1,7 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await */
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
 import { allocationCommandSchema,createContractCommandSchema,reviseContractCommandSchema }
   from "@nation-reserve/contract-operations";
-import type { FastifyInstance,FastifyRequest } from "fastify";
+
 import { z } from "zod";
 
 export interface ContractRouteService {
@@ -20,10 +21,10 @@ export interface ContractRouteService {
 }
 export interface ContractRouteOptions {
   service:ContractRouteService;
-  authenticate(request:FastifyRequest):Promise<{userId:string}>;
+  authenticate(request:AppFastifyRequest):Promise<{userId:string}>;
 }
-export async function registerContractRoutes(app:FastifyInstance<any,any,any,any>,options:ContractRouteOptions){
-  const user=async(r:FastifyRequest)=>(await options.authenticate(r)).userId;
+export function registerContractRoutes(app:AppFastifyInstance,options:ContractRouteOptions){
+  const user=async(r:AppFastifyRequest)=>(await options.authenticate(r)).userId;
   const company="/api/v1/organizations/:organizationId/company/contracts";
   const manufacturer="/api/v1/organizations/:organizationId/manufacturer/contracts";
   app.get<{Params:{organizationId:string}}>(company,async r=>

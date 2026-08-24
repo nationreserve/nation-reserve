@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import {DataView} from "./DataView.js";
 import { api } from "./auth-client.js";
 import { IntegrationPage } from "./IntegrationPages.js";
 import { OperationsPage } from "./OperationsPages.js";
@@ -13,6 +14,10 @@ import { isSharedAccountRoute, SharedAccountPage } from "./AccountPages.js";
 import { AuthenticatedShell, AuthenticationShell, developmentSessions, OrganizationProvider, PlatformShell } from "@nation-reserve/application-shell";
 import { isPublicRoute, PublicPage } from "./PublicPages.js";
 import { AcceptancePage } from "./AcceptancePage.js";
+import { GuidedTrainingPage } from "./GuidedTrainingPages.js";
+import { AdminCompletionPage, QueuePage, SupportPage } from "./PlatformCompletionPages.js";
+import { CompanyPage } from "./CompanyPages.js";
+import { ManufacturerPage } from "./ManufacturerPages.js";
 
 const registrationTypes = {
   "robot-owner": ["Become a Robot Owner", "Create an owner organization before claiming a robot."],
@@ -94,16 +99,19 @@ function ForgotPassword() {
 function Account() {
   const [account, setAccount] = useState<Record<string, unknown> | null>(null);
   useEffect(() => { void api.get<Record<string, unknown>>("/api/v1/account").then(setAccount).catch(() => navigate("/login")); }, []);
-  return <Layout title="Account">{account ? <pre>{JSON.stringify(account, null, 2)}</pre> : <p>Loading…</p>}
+  return <Layout title="Account">{account ? <DataView data={account}/> : <p>Loading…</p>}
     <nav><a href="/account/security">Security</a> · <a href="/account/sessions">Sessions</a> ·
       <a href="/organizations/select">Organizations</a></nav></Layout>;
 }
 function DataPage({ title, endpoint }: { title: string; endpoint: string }) {
   const [data, setData] = useState<unknown>("Loading…");
   useEffect(() => { void api.get(endpoint).then(setData).catch(() => navigate("/login")); }, [endpoint]);
-  return <Layout title={title}><pre>{typeof data === "string" ? data : JSON.stringify(data, null, 2)}</pre></Layout>;
+  return <Layout title={title}><DataView data={data}/></Layout>;
 }
 function RouteContent({ path }: { path: string }) {
+  if (path === "/support" || path.startsWith("/support/")) return <SupportPage path={path} />;
+  if (path === "/downpayment-queue") return <QueuePage />;
+  if (path.startsWith("/platform/admin/")) return <AdminCompletionPage path={path} />;
   if (isSharedAccountRoute(path)) return <SharedAccountPage path={path} />;
   if (isPublicRoute(path)) return <PublicPage path={path} />;
   if (path === "/development/components") return <ComponentGallery />;
@@ -129,8 +137,11 @@ function RouteContent({ path }: { path: string }) {
   if (path.includes("billing/payment-methods") || path.includes("payout-account") || path.startsWith("/company/payments") || path.startsWith("/owner/payouts") || path.startsWith("/platform/payments") || path.startsWith("/platform/payouts") || path.startsWith("/platform/payment-webhooks") || path.startsWith("/platform/payment-reconciliation") || path.startsWith("/platform/refunds") || path.startsWith("/platform/processor-disputes")) return <PaymentPage path={path} />;
   if (path.startsWith("/owner/earnings") || path.startsWith("/company/billing") || path.startsWith("/company/invoices") || path.startsWith("/platform/financial") || path.startsWith("/platform/journal") || path.startsWith("/platform/reconciliation") || path.startsWith("/platform/settlement")) return <FinancialPage path={path} />;
   if (path.startsWith("/owner/operations") || path.startsWith("/manufacturer/heartbeat") || path.startsWith("/company/operations") || path.startsWith("/platform/heartbeat") || path.startsWith("/platform/operating-time") || path.startsWith("/platform/downtime") || path.startsWith("/platform/incidents")) return <OperationsPage path={path} />;
+  if (path.startsWith("/company/training-setup") || path.startsWith("/manufacturer/training-requests")) return <GuidedTrainingPage path={path} />;
   if (path.startsWith("/company/contracts") || path.startsWith("/manufacturer/contracts") || path.includes("/assignments/")) return <ContractPage path={path} />;
-  if (path.startsWith("/manufacturer") || path.startsWith("/owner") || path.startsWith("/platform")) return <IntegrationPage path={path} />;
+  if (path.startsWith("/company")) return <CompanyPage path={path} />;
+  if (path.startsWith("/manufacturer")) return <ManufacturerPage path={path} />;
+  if (path.startsWith("/owner") || path.startsWith("/platform")) return <IntegrationPage path={path} />;
   return <PublicPage path="/errors/404" />;
 }
 
@@ -138,7 +149,7 @@ export function PlatformApp() {
   const [path, setPath] = useState(location.pathname);
   useEffect(() => { const change = () => setPath(location.pathname); addEventListener("popstate", change); return () => removeEventListener("popstate", change); }, []);
   const isAuth = isSharedAccountRoute(path) && (!path.startsWith("/account") || path === "/account/api-consent") || path.startsWith("/register/") || path.includes("invitations/accept");
-  const isPublic = isPublicRoute(path);
+  const isPublic = isPublicRoute(path) && path !== "/support";
   if (isAuth || isPublic) return <RouteContent path={path} />;
   const fixture = path.startsWith("/platform") ? developmentSessions.platform! : path.startsWith("/company") ? developmentSessions.company! : path.startsWith("/manufacturer") ? developmentSessions.manufacturer! : developmentSessions.owner!;
   const content = <RouteContent path={path} />;

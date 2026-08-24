@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import {DataView} from "./DataView.js";
 import { api } from "./auth-client.js";
 
 const stateDimensions = ["registration_state","ownership_state","activation_state","heartbeat_state",
@@ -26,7 +27,7 @@ export function IntegrationPage({ path }: { path: string }) {
       {path.match(/\/robots\/[^/]+$/) && <div className="state-grid">
         {stateDimensions.map((state) => <article key={state}><span>{state.replaceAll("_"," ")}</span>
           <strong>{readState(data,state)}</strong></article>)}</div>}
-      {data !== undefined && <pre>{JSON.stringify(data,null,2)}</pre>}
+      {data !== undefined && <DataView data={data}/>}
     </section></main>;
 }
 function endpointFor(path: string): string | undefined {

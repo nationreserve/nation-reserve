@@ -1,0 +1,2 @@
+export function isCompanyRoute(path:string){return path==="/company"||path.startsWith("/company/")}
+export function isExpansionRoute(path:string){return path==="/training-equipment"||path==="/training-projects"||path==="/training-data/review"||path==="/manufacturer/heartbeat-integration"||/^\/owner\/ownership-allocations\/[^/]+$/.test(path)||/^\/company\/contracts\/[^/]+\/purchase-capacity$/.test(path)}

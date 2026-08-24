@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument,@typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment,@typescript-eslint/no-unsafe-member-access,@typescript-eslint/no-unsafe-argument,@typescript-eslint/no-unsafe-return */
 import type{Pool}from"pg";import type{PaymentProvider}from"@nation-reserve/payments";
 const fail=(code:string,statusCode=400)=>Object.assign(new Error(code),{code,statusCode});
 export class PostgresManufacturerFinancialService{constructor(private readonly pool:Pool,private readonly provider:PaymentProvider,private readonly config:{executionEnabled:boolean;country:string;returnUrl:string;refreshUrl:string}){}

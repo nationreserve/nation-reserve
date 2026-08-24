@@ -1,0 +1,6 @@
+{
+    "imports":  {
+                    "pg":  "npm:pg@8.16.3",
+                    "@nation-reserve/payments":  "./payment-types.ts"
+                }
+}

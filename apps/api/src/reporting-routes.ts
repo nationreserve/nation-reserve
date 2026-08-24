@@ -1,7 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-argument,@typescript-eslint/require-await */
-import type{FastifyInstance,FastifyRequest}from"fastify";import{z}from"zod";import type{PostgresReportingService}from"./postgres-reporting-service.js";
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+import{z}from"zod";import type{PostgresReportingService}from"./postgres-reporting-service.js";
 const orgQuery=z.object({organizationId:z.string().uuid().optional()}),run=z.object({reportKey:z.string(),organizationId:z.string().uuid().optional(),from:z.coerce.date(),to:z.coerce.date(),timezone:z.string().default("UTC"),filters:z.record(z.string(),z.unknown()).default({})});
-export async function registerReportingRoutes(app:FastifyInstance<any,any,any,any>,options:{service:PostgresReportingService;authenticate(r:FastifyRequest):Promise<{userId:string}>}){const actor=async(r:FastifyRequest)=>(await options.authenticate(r)).userId;
+export function registerReportingRoutes(app:AppFastifyInstance,options:{service:PostgresReportingService;authenticate(r:AppFastifyRequest):Promise<{userId:string}>}){const actor=async(r:AppFastifyRequest)=>(await options.authenticate(r)).userId;
  app.get("/api/v1/reports",async r=>{const q=orgQuery.parse(r.query);return options.service.definitions(await actor(r),q.organizationId);});
  app.post("/api/v1/reports/run",async r=>options.service.run(await actor(r),run.parse(r.body)));
  app.get("/api/v1/reports/saved",async r=>{const q=orgQuery.parse(r.query);return options.service.saved(await actor(r),q.organizationId);});

@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-11T00:47:32.403Z",
-  "migrationCount": 36,
+  "generatedAt": "2026-08-11T02:38:28.801Z",
+  "migrationCount": 37,
   "items": [
     {
       "filename": "0001_core_domain.sql",
@@ -250,6 +250,13 @@
     {
       "filename": "0036_manufacturer_directory_messaging.sql",
       "sha256": "86cae8eea67d298c79a92b27e56e8681011a46a6c47484bb9a30abff9c181ede",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0037_account_workflow_completion.sql",
+      "sha256": "842e800b71c59524a1a6ca16c8b81183c2f158fd1ddd5247b7df4908ff17fa95",
       "risk": "high_risk",
       "requiresBackup": true,
       "requiresApproval": true

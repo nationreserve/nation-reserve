@@ -1,3 +1,5 @@
+> Superseded by [complete-product-audit-final-2026-08-10.md](./complete-product-audit-final-2026-08-10.md) after completion repairs. This document is retained as the historical pre-repair audit.
+
 # RoboWorkPool Complete Product Audit and Repair
 
 Audit date: 2026-08-10  

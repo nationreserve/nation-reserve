@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+
 import { z } from "zod";
 import type { PostgresActivityService } from "./postgres-activity-service.js";
 
@@ -13,9 +14,9 @@ const query = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50), sort: z.enum(["asc","desc"]).default("desc"),
 }).refine(value => !value.from || !value.to || value.from <= value.to, { message: "from must not be after to" });
 
-export async function registerActivityRoutes(app: FastifyInstance<any,any,any,any>, options: {
+export function registerActivityRoutes(app: AppFastifyInstance, options: {
   service: PostgresActivityService;
-  authenticate(request: FastifyRequest): Promise<{ userId: string }>;
+  authenticate(request: AppFastifyRequest): Promise<{ userId: string }>;
 }) {
   app.get("/api/v1/organizations/:organizationId/activity", async request => {
     const actor = await options.authenticate(request);

@@ -1,14 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+
 import { z } from "zod";
 import type { PostgresAcceptanceService } from "./postgres-acceptance-service.js";
 
 const uuid = z.string().uuid();
-export interface AcceptanceRouteOptions { service: PostgresAcceptanceService; authenticate(request: FastifyRequest): Promise<{ userId: string; sessionId: string }> }
-export async function registerAcceptanceRoutes(app: FastifyInstance<any, any, any, any>, options: AcceptanceRouteOptions) {
-  const principal = async (request: FastifyRequest) => options.authenticate(request);
-  const actor = async (request: FastifyRequest) => (await principal(request)).userId;
-  const stepUp = (request: FastifyRequest) => typeof request.headers["x-admin-step-up"] === "string" ? request.headers["x-admin-step-up"] : undefined;
+export interface AcceptanceRouteOptions { service: PostgresAcceptanceService; authenticate(request: AppFastifyRequest): Promise<{ userId: string; sessionId: string }> }
+export function registerAcceptanceRoutes(app: AppFastifyInstance, options: AcceptanceRouteOptions) {
+  const principal = async (request: AppFastifyRequest) => options.authenticate(request);
+  const actor = async (request: AppFastifyRequest) => (await principal(request)).userId;
+  const stepUp = (request: AppFastifyRequest) => typeof request.headers["x-admin-step-up"] === "string" ? request.headers["x-admin-step-up"] : undefined;
   app.get("/api/v1/platform/acceptance/overview", async (r) => options.service.overview(await actor(r)));
   app.get("/api/v1/platform/acceptance/journeys", async (r) => options.service.journeys(await actor(r)));
   app.get("/api/v1/platform/acceptance/journeys/:journeyId", async (r) => options.service.journeys(await actor(r), z.object({ journeyId: z.string().min(1).max(100) }).parse(r.params).journeyId));

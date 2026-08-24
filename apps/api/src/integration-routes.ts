@@ -1,6 +1,7 @@
-﻿/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/no-base-to-string */
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
 import { parseCredential, type IntegrationPrincipal } from "@nation-reserve/robot-integration";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+
 import { z } from "zod";
 
 export interface IntegrationRouteService {
@@ -31,9 +32,9 @@ export interface IntegrationRouteService {
 }
 export interface IntegrationRouteOptions {
   service: IntegrationRouteService;
-  authenticateHuman(request: FastifyRequest): Promise<{ userId: string }>;
+  authenticateHuman(request: AppFastifyRequest): Promise<{ userId: string }>;
 }
-function apiKey(request: FastifyRequest) {
+function apiKey(request: AppFastifyRequest) {
   const value = request.headers["x-api-key"];
   if (typeof value !== "string") throw error("MANUFACTURER_AUTHENTICATION_REQUIRED", 401);
   try { parseCredential(value); } catch { throw error("MANUFACTURER_AUTHENTICATION_FAILED", 401); }
@@ -42,11 +43,11 @@ function apiKey(request: FastifyRequest) {
 function error(code: string, statusCode: number) {
   return Object.assign(new Error(code), { code, statusCode });
 }
-export async function registerIntegrationRoutes(
-  app: FastifyInstance<any, any, any, any>, options: IntegrationRouteOptions,
+export function registerIntegrationRoutes(
+  app: AppFastifyInstance, options: IntegrationRouteOptions,
 ) {
-  const human = async (request: FastifyRequest) => options.authenticateHuman(request);
-  const integration = async (request: FastifyRequest) => options.service.authenticateCredential(apiKey(request));
+  const human = async (request: AppFastifyRequest) => options.authenticateHuman(request);
+  const integration = async (request: AppFastifyRequest) => options.service.authenticateCredential(apiKey(request));
   const org = "/api/v1/organizations/:organizationId/manufacturer";
   app.get<{ Params: { organizationId: string } }>(`${org}/application`, async (r) =>
     options.service.application((await human(r)).userId, r.params.organizationId));

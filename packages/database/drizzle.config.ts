@@ -6,6 +6,7 @@ export default defineConfig({
   out: "./migrations/generated",
   dbCredentials: {
     url:
+      process.env["DIRECT_URL"] ??
       process.env["DATABASE_URL"] ??
       "postgresql://roboworkpool:local-postgres-password-change-me@localhost:5432/roboworkpool",
   },

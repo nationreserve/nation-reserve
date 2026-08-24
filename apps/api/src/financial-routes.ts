@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-argument */
-import type { FastifyInstance,FastifyRequest } from "fastify";
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+
 import {z} from "zod";
 export interface FinancialRouteService{
   organization(userId:string,organizationId:string,resource:string,id?:string):Promise<object>;
@@ -7,9 +8,9 @@ export interface FinancialRouteService{
   command(userId:string,action:string,id:string|undefined,input:Record<string,unknown>):Promise<object>;
   dispute(userId:string,organizationId:string,input:Record<string,unknown>):Promise<object>;
 }
-export async function registerFinancialRoutes(app:FastifyInstance<any,any,any,any>,options:{
-  service:FinancialRouteService;authenticate(r:FastifyRequest):Promise<{userId:string}>}){
-  const actor=async(r:FastifyRequest)=>(await options.authenticate(r)).userId;
+export function registerFinancialRoutes(app:AppFastifyInstance,options:{
+  service:FinancialRouteService;authenticate(r:AppFastifyRequest):Promise<{userId:string}>}){
+  const actor=async(r:AppFastifyRequest)=>(await options.authenticate(r)).userId;
   const org="/api/v1/organizations/:organizationId";
   for(const [path,resource] of [["billing/account","billing-account"],["billing/summary","billing-summary"],
     ["invoices","invoices"],["financial-disputes","disputes"],["earnings/account","earning-account"],

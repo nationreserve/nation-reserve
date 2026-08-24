@@ -150,17 +150,15 @@ describe("Prompt 014 shared account UI", () => {
     fireEvent.click(screen.getByRole("button", { name: "Request account deletion" }));
     expect(
       screen.getByRole("dialog", {
-        name: "Account deletion is not currently available",
+        name: "Request account deletion?",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/No deletion was performed/)).toBeInTheDocument();
+    expect(screen.getByText(/30-day recovery window/i)).toBeInTheDocument();
   });
-  it("shows an invitation-preview dependency without revealing the token", () => {
+  it("requests a safe invitation preview without revealing the token", () => {
     history.replaceState({}, "", "/accept-invitation?token=" + "s".repeat(40));
     render(<SharedAccountPage path="/accept-invitation" />);
-    expect(
-      screen.getByText(/does not provide a safe invitation-preview endpoint/),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Accept invitation" })).toBeEnabled();
     expect(document.body.textContent).not.toContain("s".repeat(40));
   });
   it("persists accessible presentation preferences", () => {

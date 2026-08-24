@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
   Alert,
   Button,
@@ -221,7 +221,11 @@ function RegistrationSuccess() {
     </AuthPage>
   );
 }
-function Login() {
+const formText = (form: FormData, name: string) => {
+  const value = form.get(name);
+  return typeof value === "string" ? value : "";
+};
+type InvitationPreview = { organizationName?: string; organizationType?: string; role?: string; invitedBy?: string; expiresAt?: string };function Login() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -231,8 +235,8 @@ function Login() {
     const data = new FormData(event.currentTarget);
     try {
       const result = await api.login(
-        String(data.get("email")),
-        String(data.get("password")),
+        formText(data, "email"),
+        formText(data, "password"),
       );
       navigate(
         result.emailVerified ? "/organizations/select" : "/verify-email/pending",
@@ -248,7 +252,7 @@ function Login() {
       title="Log in to Nation Reserve"
       intro="Use the same Nation Reserve account across the products and organizations you are authorized to access."
     >
-      <form className="account-form" onSubmit={submit}>
+      <form className="account-form" onSubmit={event=>{void submit(event)}}>
         <Field name="email" label="Email" type="email" autoComplete="username" />
         <Field
           name="password"
@@ -295,7 +299,7 @@ function Verification({ mode }: { mode: "confirm" | "pending" | "complete" }) {
   }
   async function resend(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const email = String(new FormData(event.currentTarget).get("email"));
+    const email = formText(new FormData(event.currentTarget), "email");
     await api
       .post("/api/v1/auth/email-verification/request", { email })
       .catch(() => undefined);
@@ -335,7 +339,7 @@ function Verification({ mode }: { mode: "confirm" | "pending" | "complete" }) {
       title="Email verification pending"
       intro="Verification links are single-use and expire according to the active security configuration. Requesting another link invalidates older active links."
     >
-      <form className="account-form" onSubmit={resend}>
+      <form className="account-form" onSubmit={event=>{void resend(event).catch((cause:unknown)=>setError(errorMessage(cause)))}}>
         <Field name="email" label="Email" type="email" autoComplete="email" />
         <Button type="submit">Resend verification</Button>
       </form>
@@ -350,7 +354,7 @@ function ForgotPassword() {
   const [sent, setSent] = useState(false);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const email = String(new FormData(event.currentTarget).get("email"));
+    const email = formText(new FormData(event.currentTarget), "email");
     await api
       .post("/api/v1/auth/password-reset/request", { email })
       .catch(() => undefined);
@@ -366,7 +370,7 @@ function ForgotPassword() {
           If the account is eligible, a single-use password-reset message has been sent.
         </Alert>
       ) : (
-        <form className="account-form" onSubmit={submit}>
+        <form className="account-form" onSubmit={event=>{void submit(event)}}>
           <Field name="email" label="Email" type="email" autoComplete="email" />
           <Button type="submit">Send reset link</Button>
         </form>
@@ -410,7 +414,7 @@ function ResetPassword() {
       title="Choose a new password"
       intro="Reset links are single-use. Use at least 12 characters and a password you do not reuse elsewhere."
     >
-      <form className="account-form" onSubmit={submit}>
+      <form className="account-form" onSubmit={event=>{void submit(event)}}>
         <Field
           name="password"
           label="New password"
@@ -435,47 +439,7 @@ function ResetPassword() {
     </AuthPage>
   );
 }
-function Invitation({ accept }: { accept: boolean }) {
-  const [status, setStatus] = useState("");
-  const token = new URLSearchParams(location.search).get("token") ?? "";
-  async function decide(choice: "accept" | "decline") {
-    if (choice === "decline") {
-      setStatus("Invitation declined locally. No organization membership was created.");
-      return;
-    }
-    try {
-      await api.post("/api/v1/invitations/accept", { token });
-      setStatus("Invitation accepted. Continue to organization selection.");
-    } catch (cause) {
-      setStatus(errorMessage(cause));
-    }
-  }
-  return (
-    <AuthPage
-      title={accept ? "Accept organization invitation" : "Organization invitation"}
-      intro="Review the inviting organization, role, and resulting access before accepting. Invitation secrets never appear in visible page content."
-    >
-      <Alert title="Invitation details require authenticated preview">
-        The existing API accepts an opaque token but does not provide a safe
-        invitation-preview endpoint. Inviter, organization, role, and permission details
-        cannot be displayed until that endpoint exists.
-      </Alert>
-      {status ? (
-        <p role="status">{status}</p>
-      ) : (
-        <div className="public-actions">
-          <Button onClick={() => void decide("accept")} disabled={token.length < 32}>
-            Accept invitation
-          </Button>
-          <Button variant="secondary" onClick={() => void decide("decline")}>
-            Decline
-          </Button>
-        </div>
-      )}
-      <a href="/logout">Need a different account?</a>
-    </AuthPage>
-  );
-}
+function Invitation({ accept }: { accept: boolean }) { const [status,setStatus]=useState(""),[preview,setPreview]=useState<InvitationPreview>(),token=new URLSearchParams(location.search).get("token")??""; useEffect(()=>{if(token.length>=16)void api.post<InvitationPreview>("/api/v1/invitations/preview",{token}).then(setPreview).catch(c=>setStatus(errorMessage(c)))},[token]); async function decide(choice:"accept"|"decline"){try{await api.post(choice==="accept"?"/api/v1/invitations/accept":"/api/v1/invitations/decline",{token});setStatus(choice==="accept"?"Invitation accepted. Continue to organization selection.":"Invitation declined. No membership was created.")}catch(c){setStatus(errorMessage(c))}} return <AuthPage title={accept?"Accept organization invitation":"Organization invitation"} intro="Review the inviting organization, role, expiration, and resulting access before accepting.">{preview&&<section className="nr-card"><h2>{preview.organizationName??"Organization"}</h2><p>Organization type: {preview.organizationType??"Unavailable"}</p><p>Role: {preview.role??"Unavailable"}</p><p>Invited by: {preview.invitedBy??"Unavailable"}</p><p>Expires: {preview.expiresAt??"Unavailable"}</p></section>}{status?<p role="status">{status}</p>:<div className="public-actions"><Button onClick={()=>void decide("accept")} disabled={token.length<16}>Accept invitation</Button><Button variant="secondary" onClick={()=>void decide("decline")} disabled={token.length<16}>Decline</Button></div>}<a href="/logout">Need a different account?</a></AuthPage>}
 function Logout() {
   const [open, setOpen] = useState(true);
   const [done, setDone] = useState(false);
@@ -511,17 +475,16 @@ function Logout() {
 }
 
 function useRemote<T>(path: string) {
-  const [state, setState] = useState<{ loading: boolean; data?: T; error?: string }>({
-    loading: true,
-  });
-  const load = () => {
+  const [state, setState] = useState<{ loading: boolean; data?: T; error?: string }>({ loading: true });
+  const load = useCallback(() => {
     setState({ loading: true });
-    void api
-      .get<T>(path)
-      .then((data) => setState({ loading: false, data }))
-      .catch((cause) => setState({ loading: false, error: errorMessage(cause) }));
-  };
-  useEffect(load, [path]);
+    void api.get<T>(path).then((data) => setState({ loading: false, data })).catch((cause: unknown) => setState({ loading: false, error: errorMessage(cause) }));
+  }, [path]);
+  useEffect(() => {
+    let active = true;
+    void api.get<T>(path).then((data) => { if (active) setState({ loading: false, data }); }).catch((cause: unknown) => { if (active) setState({ loading: false, error: errorMessage(cause) }); });
+    return () => { active = false; };
+  }, [path]);
   return { ...state, retry: load };
 }
 function AccountLayout({
@@ -614,7 +577,7 @@ function Profile() {
   const [message, setMessage] = useState("");
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const displayName = String(new FormData(e.currentTarget).get("displayName"));
+    const displayName = formText(new FormData(e.currentTarget), "displayName");
     await api.patch("/api/v1/account", { displayName });
     setMessage("Profile name saved.");
   }
@@ -628,7 +591,7 @@ function Profile() {
       ) : remote.error ? (
         <ErrorState description={remote.error} onRetry={remote.retry} />
       ) : (
-        <form className="account-form" onSubmit={submit}>
+        <form className="account-form" onSubmit={event=>{void submit(event)}}>
           <Field name="displayName" label="Display name" autoComplete="name" />
           <FormField label="Email">
             <input value={remote.data?.email ?? ""} readOnly aria-readonly="true" />
@@ -688,7 +651,7 @@ function Security() {
           href="/support"
         />
       </Cards>
-      <form className="account-form" onSubmit={submit}>
+      <form className="account-form" onSubmit={event=>{void submit(event)}}>
         <Field
           name="currentPassword"
           label="Current password"
@@ -793,77 +756,7 @@ function Sessions() {
     </AccountLayout>
   );
 }
-function Preferences() {
-  const initial = (localStorage.getItem("nr-theme") as ThemeMode | null) ?? "system";
-  const [theme, setLocalTheme] = useState<ThemeMode>(initial);
-  const [density, setDensity] = useState(
-    localStorage.getItem("nr-density") ?? "comfortable",
-  );
-  function save() {
-    setTheme(theme);
-    localStorage.setItem("nr-density", density);
-    document.documentElement.dataset.density = density;
-  }
-  return (
-    <AccountLayout
-      title="Preferences"
-      description="Choose presentation preferences that follow you across the Nation Reserve web experience."
-    >
-      <form
-        className="account-form"
-        onSubmit={(e) => {
-          e.preventDefault();
-          save();
-        }}
-      >
-        <FormField label="Theme">
-          <select
-            aria-label="Theme"
-            value={theme}
-            onChange={(e) => setLocalTheme(e.target.value as ThemeMode)}
-          >
-            <option value="system">Use system setting</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
-          </select>
-        </FormField>
-        <FormField label="Density">
-          <select
-            aria-label="Density"
-            value={density}
-            onChange={(e) => setDensity(e.target.value)}
-          >
-            <option value="comfortable">Comfortable</option>
-            <option value="compact">Compact</option>
-          </select>
-        </FormField>
-        <label className="check">
-          <input
-            type="checkbox"
-            defaultChecked={
-              window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
-            }
-          />{" "}
-          Prefer reduced motion
-        </label>
-        <FormField label="Timezone">
-          <select aria-label="Timezone" defaultValue="UTC">
-            <option value="UTC">UTC</option>
-            <option disabled>
-              Organization timezones load from account configuration later
-            </option>
-          </select>
-        </FormField>
-        <FormField label="Date format">
-          <select aria-label="Date format" defaultValue="en-US">
-            <option value="en-US">Month day, year</option>
-          </select>
-        </FormField>
-        <Button type="submit">Save preferences</Button>
-      </form>
-    </AccountLayout>
-  );
-}
+function Preferences(){const[theme,setLocalTheme]=useState<ThemeMode>("system"),[density,setDensity]=useState("comfortable"),[reducedMotion,setReducedMotion]=useState(false),[status,setStatus]=useState("");useEffect(()=>{void api.get<{preferences?:{theme?:ThemeMode;density?:string;reducedMotion?:boolean}}>("/api/v1/account/preferences").then(r=>{setLocalTheme(r.preferences?.theme??"system");setDensity(r.preferences?.density??"comfortable");setReducedMotion(r.preferences?.reducedMotion??false)}).catch(c=>setStatus(errorMessage(c)))},[]);async function save(){setTheme(theme);localStorage.setItem("nr-density",density);document.documentElement.dataset.density=density;await api.put("/api/v1/account/preferences",{theme,density,reducedMotion,timezone:Intl.DateTimeFormat().resolvedOptions().timeZone,dateFormat:"en-US"});setStatus("Preferences saved to your account.")}return <AccountLayout title="Preferences" description="Choose presentation preferences that follow you across Nation Reserve."><form className="account-form" onSubmit={e=>{e.preventDefault();void save().catch(c=>setStatus(errorMessage(c)))}}><FormField label="Theme"><select aria-label="Theme" value={theme} onChange={e=>setLocalTheme(e.target.value as ThemeMode)}><option value="system">Use system setting</option><option value="light">Light</option><option value="dark">Dark</option></select></FormField><FormField label="Density"><select aria-label="Density" value={density} onChange={e=>setDensity(e.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></FormField><label className="check"><input type="checkbox" checked={reducedMotion} onChange={e=>setReducedMotion(e.target.checked)}/> Prefer reduced motion</label><Button type="submit">Save preferences</Button>{status&&<p role="status">{status}</p>}</form></AccountLayout>}
 function Organizations({ selectOnly = false }: { selectOnly?: boolean }) {
   const remote = useRemote<Organization[]>("/api/v1/account/organizations");
   async function enter(id: string) {
@@ -930,70 +823,7 @@ function Organizations({ selectOnly = false }: { selectOnly?: boolean }) {
     </AccountLayout>
   );
 }
-function CreateOrganization() {
-  const [step, setStep] = useState(0);
-  const [type, setType] = useState<
-    "robot-owner" | "hiring-company" | "manufacturer" | null
-  >(null);
-  const descriptions = {
-    "robot-owner":
-      "You own robots. Manufacturers verify eligible models and serials. Earnings arise only from verified operating time in fulfilled assignments.",
-    "hiring-company":
-      "You contract Robot Manufacturers, receive allocated robots, monitor verified operation, and receive invoices.",
-    manufacturer:
-      "You integrate supported models and production robots, fulfill contracts, and provide signed heartbeat evidence.",
-  };
-  return (
-    <AuthPage
-      title="Create an organization"
-      intro="Choose the organization type first. Role-specific onboarding details are collected only after the shared account and organization foundation is ready."
-    >
-      <Stepper
-        current={step}
-        steps={[
-          { label: "Choose type" },
-          { label: "Understand next steps" },
-          { label: "Create organization" },
-        ]}
-      />
-      {step === 0 ? (
-        <div className="choice-grid">
-          {Object.entries(descriptions).map(([key, text]) => (
-            <button
-              key={key}
-              type="button"
-              className="choice"
-              onClick={() => {
-                setType(key as typeof type);
-                setStep(1);
-              }}
-            >
-              <strong>
-                {key.replaceAll("-", " ").replace(/\b\w/g, (c) => c.toUpperCase())}
-              </strong>
-              <span>{text}</span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <>
-          <Alert title={`${type?.replaceAll("-", " ")} organization selected`}>
-            {type ? descriptions[type] : "Choose a type."}
-          </Alert>
-          <p>
-            The existing backend creates an organization only during role-specific
-            public registration. A standalone authenticated organization-creation
-            endpoint is required before this final step can submit.
-          </p>
-          <Button disabled>Create organization — API required</Button>{" "}
-          <Button variant="secondary" onClick={() => setStep(0)}>
-            Choose another type
-          </Button>
-        </>
-      )}
-    </AuthPage>
-  );
-}
+function CreateOrganization(){const[step,setStep]=useState(0),[type,setType]=useState<"robot-owner"|"hiring-company"|"manufacturer"|null>(null),[status,setStatus]=useState("");async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!type)return;const d=new FormData(e.currentTarget),result=await api.post<{id:string}>("/api/v1/account/organizations",{type:type==="robot-owner"?"robot_owner":type==="hiring-company"?"hiring_company":"robot_manufacturer",legalName:formText(d, "legalName"),displayName:formText(d, "displayName")});sessionStorage.setItem("nr-active-organization",result.id);setStatus("Organization created. Continue to role onboarding.");setStep(2)}return <AuthPage title="Create an organization" intro="Create an organization under your existing Nation Reserve account."><Stepper current={step} steps={[{label:"Choose type"},{label:"Organization details"},{label:"Created"}]}/>{step===0?<div className="choice-grid">{[["robot-owner","Robot Owner"],["hiring-company","Hiring Company"],["manufacturer","Robot Manufacturer"]].map(([key,label])=><button key={key} type="button" className="choice" onClick={()=>{setType(key as typeof type);setStep(1)}}><strong>{label}</strong><span>Create the organization, then complete its role-specific verification.</span></button>)}</div>:step===1?<form className="account-form" onSubmit={e=>void submit(e).catch(c=>setStatus(errorMessage(c)))}><FormField label="Legal name" required><input name="legalName" required minLength={2}/></FormField><FormField label="Display name" required><input name="displayName" required minLength={2}/></FormField><Button type="submit">Create organization</Button><Button type="button" variant="secondary" onClick={()=>setStep(0)}>Choose another type</Button>{status&&<p role="alert">{status}</p>}</form>:<Alert title="Organization created">{status} <a href="/account/organizations">Open organizations</a>.</Alert>}</AuthPage>}
 function Notifications() {
   const [state, setState] = useState<{
       items: Array<{
@@ -1006,16 +836,13 @@ function Notifications() {
       }>;
     }>({ items: [] }),
     [error, setError] = useState("");
-  const load = () =>
-    api
-      .get<typeof state>("/api/v1/notifications?limit=100")
-      .then(setState)
-      .catch((e: unknown) =>
-        setError(e instanceof Error ? e.message : "Unable to load notifications"),
-      );
+  const load = useCallback(() =>
+    api.get<typeof state>("/api/v1/notifications?limit=100").then(setState).catch((e: unknown) =>
+      setError(e instanceof Error ? e.message : "Unable to load notifications")),
+  []);
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
   const unread = state.items.filter(
     (n) => n.status !== "read" && n.status !== "dismissed",
   ).length;
@@ -1064,39 +891,7 @@ function Notifications() {
     </AccountLayout>
   );
 }
-function DeleteAccount() {
-  const [open, setOpen] = useState(false);
-  return (
-    <AccountLayout
-      title="Delete account"
-      description="Understand historical retention and organizational effects before requesting account deletion."
-    >
-      <Alert tone="warning" title="Deletion does not erase required history">
-        Organizations are not necessarily deleted. Ownership, contracts, assignments,
-        audit records, financial records, disputes, security evidence, and
-        legal-retention records may remain preserved or de-identified according to
-        policy.
-      </Alert>
-      <Button variant="danger" onClick={() => setOpen(true)}>
-        Request account deletion
-      </Button>
-      <Dialog
-        open={open}
-        title="Account deletion is not currently available"
-        onClose={() => setOpen(false)}
-      >
-        <p>
-          A verified deletion-request API, recent-authentication check, retention
-          disclosure, and recovery window are required. No deletion was performed.
-        </p>
-        <Button variant="secondary" onClick={() => setOpen(false)}>
-          Keep account
-        </Button>
-      </Dialog>
-    </AccountLayout>
-  );
-}
-
+function DeleteAccount(){const[open,setOpen]=useState(false),[status,setStatus]=useState("");async function request(){const result=await api.post<{recoveryExpiresAt:string}>("/api/v1/account/deletion-requests",{});setStatus(`Deletion requested. Recovery remains available until ${new Date(result.recoveryExpiresAt).toLocaleString()}. Active sessions were revoked.`);setOpen(false)}return <AccountLayout title="Delete account" description="Request governed identity deletion with a recovery window and required-record retention."><Alert tone="warning" title="Deletion does not erase required history">Organizations are not automatically deleted. Ownership, contracts, financial records, disputes, security evidence, and required audit history remain preserved or de-identified under policy.</Alert><Button variant="danger" onClick={()=>setOpen(true)}>Request account deletion</Button>{status&&<p role="status">{status}</p>}<Dialog open={open} title="Request account deletion?" onClose={()=>setOpen(false)}><p>This requires authentication within the last 15 minutes, revokes active sessions, and begins a 30-day recovery window.</p><Button variant="danger" onClick={()=>void request().catch(c=>setStatus(errorMessage(c)))}>Confirm deletion request</Button><Button variant="secondary" onClick={()=>setOpen(false)}>Keep account</Button></Dialog></AccountLayout>}
 // eslint-disable-next-line react-refresh/only-export-components
 export function isSharedAccountRoute(path: string) {
   return [

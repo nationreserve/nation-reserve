@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-return, @typescript-eslint/require-await, @typescript-eslint/no-base-to-string */
+/* eslint-disable @typescript-eslint/require-await */
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
 import {
   hiringCompanyRegistrationSchema,
   invitationSchema,
@@ -10,7 +11,7 @@ import {
   type PublicOrganizationType,
   type RegistrationInput,
 } from "@nation-reserve/auth";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type{FastifyReply}from"fastify";
 import { z } from "zod";
 
 export interface AuthPrincipal {
@@ -100,7 +101,7 @@ export interface AuthRouteOptions {
   refreshTtlSeconds: number;
 }
 
-function cookie(request: FastifyRequest, name: string): string | undefined {
+function cookie(request: AppFastifyRequest, name: string): string | undefined {
   const raw = request.headers.cookie;
   return raw
     ?.split(";")
@@ -124,7 +125,7 @@ function clearCookie(reply: FastifyReply, options: AuthRouteOptions) {
     `${options.cookieName}=; HttpOnly; Path=/api/v1/auth; SameSite=Lax; Max-Age=0${options.cookieSecure ? "; Secure" : ""}`,
   );
 }
-function bearer(request: FastifyRequest): string {
+function bearer(request: AppFastifyRequest): string {
   const header = request.headers.authorization;
   if (!header?.startsWith("Bearer ")) throw httpError("AUTHENTICATION_REQUIRED", 401);
   return header.slice(7);
@@ -136,8 +137,8 @@ function httpError(
   return Object.assign(new Error(code), { code, statusCode });
 }
 
-export async function registerAuthRoutes(
-  app: FastifyInstance<any, any, any, any>,
+export function registerAuthRoutes(
+  app: AppFastifyInstance,
   options: AuthRouteOptions,
 ) {
   app.addHook("preHandler", async (request) => {
@@ -201,7 +202,7 @@ export async function registerAuthRoutes(
     const result = await options.service.login({
       ...body,
       ip: request.ip,
-      userAgent: request.headers["user-agent"],
+      ...(request.headers["user-agent"] ? { userAgent: request.headers["user-agent"] } : {}),
     });
     sessionCookie(reply, options, result.session.id, result.refreshToken);
     return { accessToken: result.accessToken, emailVerified: result.emailVerified };
@@ -218,7 +219,7 @@ export async function registerAuthRoutes(
     sessionCookie(reply, options, value.slice(0, separator), result.refreshToken);
     return { accessToken: result.accessToken };
   });
-  async function principal(request: FastifyRequest) {
+  async function principal(request: AppFastifyRequest) {
     return options.service.authenticate(bearer(request));
   }
   app.post("/api/v1/auth/logout", async (request, reply) => {
@@ -393,3 +394,4 @@ export async function registerAuthRoutes(
     },
   );
 }
+

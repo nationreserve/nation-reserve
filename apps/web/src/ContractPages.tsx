@@ -1,4 +1,5 @@
-﻿import { useEffect,useState } from "react";
+import { useEffect,useState } from "react";
+import {DataView} from "./DataView.js";
 import { api } from "./auth-client.js";
 
 export function ContractPage({path}:{path:string}){
@@ -25,7 +26,7 @@ export function ContractPage({path}:{path:string}){
           <article><span>Allocated</span><strong>{read(data,"assigned_robot_count")}</strong></article>
           <article><span>Remaining</span><strong>{read(data,"remaining_robot_count")}</strong></article></div></section>}
       {path.includes("/assignments/")&&<AssignmentSummary data={data}/>}
-      {data!==undefined&&<pre>{JSON.stringify(data,null,2)}</pre>}
+      {data!==undefined&&<DataView data={data}/>}
     </section></main>;
 }
 function endpointFor(path:string,organizationId:string,manufacturer:boolean){

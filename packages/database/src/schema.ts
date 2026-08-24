@@ -113,7 +113,6 @@ export const robotOwnershipRecords = pgTable("robot_ownership_records", {
   sourceReference: text("source_reference"),
   verificationMethod: text("verification_method").notNull(),
   approvedByUserId: uuid("approved_by_user_id").references(() => users.id),
-  verifiedAt: timestamp("verified_at", { withTimezone: true }),
   ...timestamps,
 }, (table) => [
   index("robot_ownership_owner_idx").on(table.ownerOrganizationId, table.ownershipStartAt),

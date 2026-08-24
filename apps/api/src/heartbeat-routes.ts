@@ -1,7 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
 import { credentialProvisionSchema,heartbeatMessageSchema,inactiveReportSchema }
   from "@nation-reserve/heartbeat-domain";
-import type { FastifyInstance,FastifyRequest } from "fastify";
+
 import { z } from "zod";
 
 export interface HeartbeatRouteService {
@@ -19,15 +20,15 @@ export interface HeartbeatRouteService {
 }
 export interface HeartbeatRouteOptions {
   service:HeartbeatRouteService;
-  authenticate(request:FastifyRequest):Promise<{userId:string}>;
+  authenticate(request:AppFastifyRequest):Promise<{userId:string}>;
   maxBodyBytes:number;
   rateLimit?: (credentialPrefix:string,sourceIp:string)=>Promise<boolean>;
 }
-const header=(request:FastifyRequest,name:string)=>{
+const header=(request:AppFastifyRequest,name:string)=>{
   const value=request.headers[name];if(typeof value!=="string"||!value)throw Object.assign(
     new Error(`Missing ${name}`),{statusCode:401,code:"HEARTBEAT_AUTHENTICATION_REQUIRED"});return value;
 };
-export async function registerHeartbeatRoutes(app:FastifyInstance<any,any,any,any>,
+export function registerHeartbeatRoutes(app:AppFastifyInstance,
   options:HeartbeatRouteOptions){
   app.post("/robot-api/v1/heartbeat",{bodyLimit:options.maxBodyBytes},async request=>{
     const credentialPrefix=header(request,"x-rwp-robot-credential");
@@ -43,7 +44,7 @@ export async function registerHeartbeatRoutes(app:FastifyInstance<any,any,any,an
   app.get("/robot-api/v1/status",async request=>
     options.service.robotStatus(header(request,"x-rwp-robot-credential")));
   const base="/api/v1/organizations/:organizationId";
-  const actor=async(r:FastifyRequest)=>(await options.authenticate(r)).userId;
+  const actor=async(r:AppFastifyRequest)=>(await options.authenticate(r)).userId;
   app.post<{Params:{organizationId:string;robotId:string}}>(
     `${base}/manufacturer/robots/:robotId/heartbeat-credentials`,async(request,reply)=>
       reply.status(201).send(await options.service.provisionCredential(await actor(request),

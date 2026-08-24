@@ -1,9 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
-import{Readable}from"node:stream";import type{FastifyInstance,FastifyRequest}from"fastify";import{z}from"zod";import type{PostgresPaymentService}from"./postgres-payment-service.js";
-type RawRequest=FastifyRequest&{paymentRawBody?:Buffer};
-export async function registerPaymentRoutes(app:FastifyInstance<any,any,any,any>,options:{service:PostgresPaymentService;authenticate(r:FastifyRequest):Promise<{userId:string}>}){
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+import{Readable}from"node:stream";import{z}from"zod";import type{PostgresPaymentService}from"./postgres-payment-service.js";
+type RawRequest=AppFastifyRequest&{paymentRawBody?:Buffer};
+export function registerPaymentRoutes(app:AppFastifyInstance,options:{service:PostgresPaymentService;authenticate(r:AppFastifyRequest):Promise<{userId:string}>}){
  app.addHook("preParsing",async(request,_reply,payload)=>{if(!request.url.startsWith("/api/v1/payment-webhooks/"))return payload;const chunks:Buffer[]=[];for await(const chunk of payload)chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));const raw=Buffer.concat(chunks);(request as RawRequest).paymentRawBody=raw;const stream=Readable.from(raw)as Readable&{receivedEncodedLength?:number};stream.receivedEncodedLength=raw.length;return stream;});
- const actor=async(r:FastifyRequest)=>(await options.authenticate(r)).userId,org="/api/v1/organizations/:organizationId";
+ const actor=async(r:AppFastifyRequest)=>(await options.authenticate(r)).userId,org="/api/v1/organizations/:organizationId";
  for(const resource of["payment-methods","payout-account","payment-attempts","payout-attempts"] as const)app.get<{Params:{organizationId:string}}>(`${org}/${resource==="payment-methods"?"billing/payment-methods":resource==="payout-account"?"earnings/payout-account":resource}`,async r=>options.service.organization(await actor(r),r.params.organizationId,resource));
  app.post<{Params:{organizationId:string}}>(`${org}/billing/payment-methods/setup`,async r=>options.service.setupPaymentMethod(await actor(r),r.params.organizationId));
  app.post<{Params:{organizationId:string}}>(`${org}/billing/payment-methods/confirm`,async r=>{const b=z.object({providerPaymentMethodId:z.string().min(3),makeDefault:z.boolean().default(true)}).parse(r.body);return options.service.confirmPaymentMethod(await actor(r),r.params.organizationId,b.providerPaymentMethodId,b.makeDefault);});

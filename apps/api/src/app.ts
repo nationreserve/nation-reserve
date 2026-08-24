@@ -60,6 +60,12 @@ import { registerManufacturerFinancialRoutes } from "./manufacturer-financial-ro
 import type { PostgresManufacturerFinancialService } from "./postgres-manufacturer-financial-service.js";
 import { registerMarketplaceRoutes } from "./marketplace-routes.js";
 import type { PostgresMarketplaceService } from "./postgres-marketplace-service.js";
+import { registerPortalProjectionRoutes } from "./portal-projection-routes.js";
+import type { PostgresPortalProjectionService } from "./postgres-portal-projection-service.js";
+import { registerGuidedTrainingRoutes } from "./guided-training-routes.js";
+import type { PostgresGuidedTrainingService } from "./postgres-guided-training-service.js";
+import { registerPlatformCompletionRoutes } from "./platform-completion-routes.js";
+import type { PostgresPlatformCompletionService } from "./postgres-platform-completion-service.js";
 
 export interface AppOptions {
   config: ApiConfig;
@@ -120,6 +126,18 @@ export interface AppOptions {
     service: PostgresMarketplaceService;
     authenticate(request: FastifyRequest): Promise<{ userId: string }>;
   };
+  portalProjections?: {
+    service: PostgresPortalProjectionService;
+    authenticate(request: FastifyRequest): Promise<{ userId: string }>;
+  };
+  platformCompletion?: {
+    service: PostgresPlatformCompletionService;
+    authenticate(request: FastifyRequest): Promise<{ userId: string }>;
+  };
+  guidedTraining?: {
+    service: PostgresGuidedTrainingService;
+    authenticate(request: FastifyRequest): Promise<{ userId: string }>;
+  };
 }
 
 type AppInstance = FastifyInstance<
@@ -149,7 +167,7 @@ export async function createApp(options: AppOptions): Promise<AppInstance> {
 
   await app.register(cors, {
     origin: options.config.WEB_ORIGIN,
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
   registerErrorHandler(app);
@@ -187,71 +205,83 @@ export async function createApp(options: AppOptions): Promise<AppInstance> {
     });
 
   if (options.auth) {
-    await registerAuthRoutes(app, options.auth);
+    registerAuthRoutes(app, options.auth);
   }
 
   if (options.integration) {
-    await registerIntegrationRoutes(app, options.integration);
+    registerIntegrationRoutes(app, options.integration);
   }
 
   if (options.financial) {
-    await registerFinancialRoutes(app, options.financial);
+    registerFinancialRoutes(app, options.financial);
   }
 
   if (options.operations) {
-    await registerOperationsRoutes(app, { ...options.operations, apiMetrics });
+    registerOperationsRoutes(app, { ...options.operations, apiMetrics });
   }
 
   if (options.specification) {
-    await registerSpecificationRoutes(app, options.specification);
+    registerSpecificationRoutes(app, options.specification);
   }
 
   if (options.reporting) {
-    await registerReportingRoutes(app, options.reporting);
+    registerReportingRoutes(app, options.reporting);
   }
 
   if (options.activity) {
-    await registerActivityRoutes(app, options.activity);
+    registerActivityRoutes(app, options.activity);
   }
 
   if (options.platform) {
-    await registerPlatformRoutes(app, options.platform);
+    registerPlatformRoutes(app, options.platform);
   }
 
   if (options.resources) {
-    await registerResourceRoutes(app, options.resources);
+    registerResourceRoutes(app, options.resources);
   }
 
   if (options.acceptance) {
-    await registerAcceptanceRoutes(app, options.acceptance);
+    registerAcceptanceRoutes(app, options.acceptance);
   }
 
   if (options.marketplace) {
-    await registerMarketplaceRoutes(app, options.marketplace);
+    registerMarketplaceRoutes(app, options.marketplace);
+  }
+
+  if (options.platformCompletion) {
+    registerPlatformCompletionRoutes(app, options.platformCompletion);
+  }
+
+  if (options.guidedTraining) {
+    registerGuidedTrainingRoutes(app, options.guidedTraining);
+  }
+
+  if (options.portalProjections) {
+    registerPortalProjectionRoutes(app, options.portalProjections);
   }
 
   if (options.manufacturerFinancial) {
-    await registerManufacturerFinancialRoutes(app, options.manufacturerFinancial);
+    registerManufacturerFinancialRoutes(app, options.manufacturerFinancial);
   }
 
   if (options.userFinancial) {
-    await registerUserFinancialRoutes(app, options.userFinancial);
+    registerUserFinancialRoutes(app, options.userFinancial);
   }
 
   if (options.expansion) {
-    await registerExpansionRoutes(app, options.expansion);
+    registerExpansionRoutes(app, options.expansion);
   }
 
   if (options.payments) {
-    await registerPaymentRoutes(app, options.payments);
+    registerPaymentRoutes(app, options.payments);
   }
 
   if (options.heartbeat) {
-    await registerHeartbeatRoutes(app, options.heartbeat);
+    registerHeartbeatRoutes(app, options.heartbeat);
   }
 
   if (options.contracts) {
-    await registerContractRoutes(app, options.contracts);
+    registerContractRoutes(app, options.contracts);
   }
   app.get("/live", () => ({
     status: "alive",

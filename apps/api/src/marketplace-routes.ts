@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+
 import { z } from "zod";
 import type { PostgresMarketplaceService } from "./postgres-marketplace-service.js";
 
@@ -28,14 +29,14 @@ const createConversation = z.object({
 });
 const sendMessage = z.object({ message: z.string().trim().min(1).max(10_000) });
 
-export async function registerMarketplaceRoutes(
-  app: FastifyInstance<any, any, any, any>,
+export function registerMarketplaceRoutes(
+  app: AppFastifyInstance,
   options: {
     service: PostgresMarketplaceService;
-    authenticate(request: FastifyRequest): Promise<{ userId: string }>;
+    authenticate(request: AppFastifyRequest): Promise<{ userId: string }>;
   },
 ) {
-  const user = async (request: FastifyRequest) =>
+  const user = async (request: AppFastifyRequest) =>
     (await options.authenticate(request)).userId;
   app.get("/api/v1/marketplace/manufacturers", async (request) =>
     options.service.manufacturers(

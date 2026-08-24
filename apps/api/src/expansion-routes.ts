@@ -1,5 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/require-await, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+ 
+import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
+
 import { z } from "zod";
 
 const uuid=z.string().uuid(),key=z.string().min(8).max(200);
@@ -23,7 +24,7 @@ export interface ExpansionService {
  reportTrainingPrivacy(input:Record<string,unknown>):Promise<unknown>;
  upsertMarketplaceProduct(input:Record<string,unknown>):Promise<unknown>;
 }
-export async function registerExpansionRoutes(app:FastifyInstance<any,any,any,any>,options:{service:ExpansionService;authenticate(request:FastifyRequest):Promise<{userId:string}>}){
+export function registerExpansionRoutes(app:AppFastifyInstance,options:{service:ExpansionService;authenticate(request:AppFastifyRequest):Promise<{userId:string}>}){
  app.get("/api/v1/public/downpayment-program",async()=>options.service.publicQueueProgram());
  app.get("/api/v1/training-equipment",async r=>options.service.marketplace(z.object({tier:z.coerce.number().int().min(1).max(3).optional(),dataType:z.string().max(80).optional(),subscription:z.coerce.boolean().optional(),limit:z.coerce.number().int().min(1).max(100).default(25)}).parse(r.query)));
  app.post("/api/v1/training-equipment/:productId/outbound-click",async r=>{const actor=await options.authenticate(r).catch(()=>undefined),{productId}=z.object({productId:uuid}).parse(r.params);await options.service.recordMarketplaceClick(productId,actor?.userId,{requestId:r.id});return{recorded:true};});

@@ -2,7 +2,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { PublicPage } from "./PublicPages.js";
-import { isExpansionRoute } from "./ExpansionPages.js";
+import { isExpansionRoute } from "./route-predicates.js";
 
 afterEach(() => cleanup());
 

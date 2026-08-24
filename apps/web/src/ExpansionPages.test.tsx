@@ -1,6 +1,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {cleanup,render,screen,waitFor} from "@testing-library/react";
-import {ExpansionPage,isExpansionRoute} from "./ExpansionPages.js";
+import {ExpansionPage} from "./ExpansionPages.js";
+import {isExpansionRoute} from "./route-predicates.js";
 
 beforeEach(()=>{history.replaceState({},"","/");});
 afterEach(()=>{cleanup();vi.restoreAllMocks();});

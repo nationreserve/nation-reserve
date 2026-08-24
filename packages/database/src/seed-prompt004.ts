@@ -63,14 +63,14 @@ export async function seedPrompt004Fixtures(pool: Pool) {
     await client.query(`
       INSERT INTO robot_ownership_records (
         id,robot_id,owner_organization_id,ownership_status,ownership_start_at,
-        acquisition_method,verification_method,approved_by_user_id,verified_at
+        acquisition_method,verification_method,approved_by_user_id
       ) VALUES
       ('00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000602',
        '00000000-0000-4000-8000-000000000201','verified',now(),'development_seed',
-       'development_seed','00000000-0000-4000-8000-000000000101',now()),
+       'development_seed','00000000-0000-4000-8000-000000000101'),
       ('00000000-0000-4000-8000-000000000702','00000000-0000-4000-8000-000000000603',
        '00000000-0000-4000-8000-000000000201','verified',now(),'development_seed',
-       'development_seed','00000000-0000-4000-8000-000000000101',now())
+       'development_seed','00000000-0000-4000-8000-000000000101')
       ON CONFLICT(id) DO NOTHING
     `);
     await client.query(`

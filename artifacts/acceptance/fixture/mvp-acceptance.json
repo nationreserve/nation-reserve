@@ -1,8 +1,8 @@
 {
   "schemaVersion": "1.0.0",
   "promptId": "PROMPT-022",
-  "startedAt": "2026-08-11T01:05:00.939Z",
-  "completedAt": "2026-08-11T01:05:01.614Z",
+  "startedAt": "2026-08-11T02:39:53.525Z",
+  "completedAt": "2026-08-11T02:39:55.642Z",
   "status": "passed",
   "fixture": true,
   "stages": [
@@ -10,11 +10,41 @@
       "id": "fixture",
       "status": "passed",
       "exitCode": 0,
-      "durationMs": 195,
+      "durationMs": 526,
       "output": "\n"
     }
   ],
   "placeholderFindings": [
+    {
+      "file": "apps/api/src/portal-projection-routes.test.ts",
+      "line": 20,
+      "excerpt": "const app=Fastify(), mock=service();"
+    },
+    {
+      "file": "apps/api/src/portal-projection-routes.test.ts",
+      "line": 21,
+      "excerpt": "await registerPortalProjectionRoutes(app as never,{service:mock as never,authenticate:async()=>({userId:\"00000000-0000-4000-8000-000000000001\"})});"
+    },
+    {
+      "file": "apps/api/src/portal-projection-routes.test.ts",
+      "line": 24,
+      "excerpt": "expect(mock.ownerDashboard).toHaveBeenCalledWith(\"00000000-0000-4000-8000-000000000001\",\"00000000-0000-4000-8000-000000000002\");"
+    },
+    {
+      "file": "apps/api/src/portal-projection-routes.test.ts",
+      "line": 28,
+      "excerpt": "const app=Fastify(),mock=service(); await registerPortalProjectionRoutes(app as never,{service:mock as never,authenticate:async()=>({userId:\"00000000-0000-4000-8000-000000000001\"})});"
+    },
+    {
+      "file": "apps/api/src/portal-projection-routes.test.ts",
+      "line": 30,
+      "excerpt": "expect(response.statusCode).toBe(200);expect(mock.createOrganization).toHaveBeenCalled();await app.close();"
+    },
+    {
+      "file": "apps/api/src/portal-projection-routes.test.ts",
+      "line": 32,
+      "excerpt": "it(\"rejects malformed organization creation before persistence\",async()=>{const app=Fastify(),mock=service();await registerPortalProjectionRoutes(app as never,{service:mock as never,authenticate:async()=>({userId:\"00000000-0000-4000-8000-00"
+    },
     {
       "file": "apps/api/src/postgres-acceptance-service.test.ts",
       "line": 2,
@@ -41,26 +71,6 @@
       "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn(),post:vi.fn()}}));"
     },
     {
-      "file": "apps/web/src/CompanyPages.tsx",
-      "line": 22,
-      "excerpt": "function StructuredResource({kind,path}:{kind:keyof typeof resourceInfo;path:string}){const info=resourceInfo[kind]!,id=path.match(new RegExp(`/company/${kind}/([^/]+)`))?.[1],isForm=path.endsWith(\"/new\")||path.endsWith(\"/edit\"),state=useLo"
-    },
-    {
-      "file": "apps/web/src/CompanyPages.tsx",
-      "line": 25,
-      "excerpt": "function JobBuilder({path}:{path:string}){const section=path.split(\"/\").at(-1)??\"overview\";const groups=[\"Primary responsibilities\",\"Secondary responsibilities\",\"Conditional responsibilities\",\"Prohibited activities\",\"Human supervision\",\"Sta"
-    },
-    {
-      "file": "apps/web/src/CompanyPages.tsx",
-      "line": 26,
-      "excerpt": "function Training({path}:{path:string}){const equipment=path.includes(\"equipment\"),uploads=path.includes(\"uploads\"),packages=path.includes(\"packages\"),sessions=path.includes(\"sessions\"),title=equipment?\"Motion-training equipment\":uploads?\"T"
-    },
-    {
-      "file": "apps/web/src/CompanyPages.tsx",
-      "line": 28,
-      "excerpt": "function Sourcing({path}:{path:string}){const messages=path.includes(\"messages\")||path.includes(\"conversations\"),manufacturer=path.includes(\"manufacturers\"),opportunity=path.includes(\"opportunities\");return <Page title={messages?\"Private ma"
-    },
-    {
       "file": "apps/web/src/ManufacturerPages.responsive.test.tsx",
       "line": 2,
       "excerpt": "import{afterEach,describe,expect,it,vi}from\"vitest\";import{cleanup,render,screen}from\"@testing-library/react\";import{ManufacturerPage}from\"./ManufacturerPages.js\";vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn().mockResolvedValue({items:[]"
@@ -69,16 +79,6 @@
       "file": "apps/web/src/ManufacturerPages.test.tsx",
       "line": 2,
       "excerpt": "vi.mock(\"./auth-client.js\",()=>({api:{get:vi.fn(),post:vi.fn()}}));beforeEach(()=>{sessionStorage.setItem(\"nr-active-organization\",\"00000000-0000-4000-8000-000000000017\");vi.mocked(api.get).mockResolvedValue({items:[]})});afterEach(()=>{cle"
-    },
-    {
-      "file": "apps/web/src/ManufacturerPages.tsx",
-      "line": 16,
-      "excerpt": "function WorkOrders({path}:{path:string}){const id=path.match(/\\/work-orders\\/([^/]+)/)?.[1],action=path.split(\"/\").at(-1);return <Page title={id&&!['map','saved'].includes(id)?\"Open work-order detail\":\"Open work-order discovery\"} descripti"
-    },
-    {
-      "file": "apps/web/src/ManufacturerPages.tsx",
-      "line": 18,
-      "excerpt": "function Messaging({path}:{path:string}){return <Page title={path.includes(\"contracts\")?\"Contract participant messages\":\"Private company conversations\"} description=\"Authorized private communication with explicit participant visibility.\"><G"
     },
     {
       "file": "apps/web/src/MarketplacePages.test.tsx",
@@ -92,7 +92,7 @@
     },
     {
       "file": "apps/web/src/MarketplacePages.tsx",
-      "line": 90,
+      "line": 91,
       "excerpt": "placeholder=\"Search by manufacturer or robot model\""
     },
     {
@@ -112,13 +112,8 @@
     },
     {
       "file": "apps/web/src/OwnerPages.tsx",
-      "line": 20,
-      "excerpt": "function Dashboard(){const id=org(),state=useData(id?`/api/v1/organizations/${id}/earnings/summary`:undefined),v=object(state.data);return <Page title=\"Robot Owner dashboard\" description=\"Robots, verified operation, earnings readiness, and "
-    },
-    {
-      "file": "apps/web/src/OwnerPages.tsx",
       "line": 21,
-      "excerpt": "function Robots(){return <Page title=\"Robots\" description=\"The central inventory for robots owned by the active organization.\"><div className=\"owner-toolbar\"><input aria-label=\"Search by serial number\" placeholder=\"Search serial number\"/><s"
+      "excerpt": "function Robots(){const id=org(),[search,setSearch]=useState(\"\"),state=useData(id?`/api/v1/organizations/${id}/owner/robots${search?`?search=${encodeURIComponent(search)}`:\"\"}`:undefined);return <Page title=\"Robots\" description=\"The central"
     },
     {
       "file": "apps/web/src/PublicPages.tsx",
@@ -184,6 +179,41 @@
       "file": "docs/appendix-m-expanded-immutable-rules.md",
       "line": 1195,
       "excerpt": "Placeholder or fabricated statistics must not appear in production."
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 84,
+      "excerpt": "- Company/Manufacturer messaging mock screens were replaced on canonical routes."
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 85,
+      "excerpt": "- Manufacturer discovery mock was replaced on the canonical Company route."
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 155,
+      "excerpt": "1. Manufacturer discovery and messaging were documented but mock-only: fixed with production API/service/UI and migration 0036."
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 163,
+      "excerpt": "2. Manufacturer directory and conversation placeholder notices: canonical routes now connected."
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 298,
+      "excerpt": "| Are mock-only financial actions remaining? | NO — no known fake-success financial action; external execution is disabled without configuration |"
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 299,
+      "excerpt": "| Are placeholder pages remaining? | YES — gap |"
+    },
+    {
+      "file": "docs/complete-product-audit-2026-08-10.md",
+      "line": 307,
+      "excerpt": "RoboWorkPool is ready for **external Stripe/Supabase configuration and staged test-mode integration work**, but it is **not ready for production or an unqualified realistic end-to-end acceptance run**. Apply migration 0036, configure extern"
     },
     {
       "file": "docs/platform-integration-audit.md",

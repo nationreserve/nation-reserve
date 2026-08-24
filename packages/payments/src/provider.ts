@@ -19,7 +19,7 @@ export interface PaymentProvider{
   cancelPayment(input:{providerPaymentId:string;idempotencyKey:string}):Promise<ProviderResult>;
   verifyWebhook(input:{rawBody:Buffer;signature:string}):Promise<VerifiedWebhookEvent>;
 }
-export interface VerifiedWebhookEvent{id:string;type:string;createdAt:Date;environment:"test"|"live";
+export interface VerifiedWebhookEvent{id:string;type:string;createdAt:Date;environment:"test"|"live";webhookSource?:"platform"|"connect";
   objectId:string;status:string;amountMinorUnits?:number;currency?:string;feeMinorUnits?:number;metadata:Record<string,string>;}
 export class PaymentProviderError extends Error{constructor(public readonly code:string,message:string,
   public readonly outcome:"failed"|"unknown"="failed"){super(message);}}

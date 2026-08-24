@@ -32,6 +32,9 @@ import { PostgresExpansionService } from "./postgres-expansion-service.js";
 import { PostgresUserFinancialService } from "./postgres-user-financial-service.js";
 import { PostgresManufacturerFinancialService } from "./postgres-manufacturer-financial-service.js";
 import { PostgresMarketplaceService } from "./postgres-marketplace-service.js";
+import { PostgresPortalProjectionService } from "./postgres-portal-projection-service.js";
+import { PostgresGuidedTrainingService } from "./postgres-guided-training-service.js";
+import { PostgresPlatformCompletionService } from "./postgres-platform-completion-service.js";
 
 const config = parseApiEnv(process.env);
 const authConfig = parseAuthEnvironment(process.env);
@@ -104,6 +107,7 @@ const paymentProvider =
         paymentConfig.PAYMENT_PROVIDER_ENVIRONMENT,
         (paymentConfig.PAYMENT_PROVIDER_API_KEY ?? paymentConfig.STRIPE_SECRET_KEY)!,
         paymentConfig.PAYMENT_PROVIDER_WEBHOOK_SECRET,
+        paymentConfig.PAYMENT_PROVIDER_CONNECT_WEBHOOK_SECRET,
         paymentConfig.PAYMENT_REQUEST_TIMEOUT_MS,
       )
     : new FakePaymentProvider("success", paymentConfig.PAYMENT_PROVIDER_WEBHOOK_SECRET);
@@ -144,6 +148,9 @@ const manufacturerFinancialService = new PostgresManufacturerFinancialService(
   },
 );
 const marketplaceService = new PostgresMarketplaceService(dependencies.postgres.pool);
+const portalProjectionService = new PostgresPortalProjectionService(dependencies.postgres.pool);
+const guidedTrainingService = new PostgresGuidedTrainingService(dependencies.postgres.pool, dependencies.objectStorage);
+const platformCompletionService = new PostgresPlatformCompletionService(dependencies.postgres.pool, dependencies.objectStorage);
 const userFinancialService = new PostgresUserFinancialService(
   dependencies.postgres.pool,
   paymentProvider,
@@ -180,6 +187,37 @@ const app = await createApp({
   },
   marketplace: {
     service: marketplaceService,
+    authenticate: async (request) => {
+      const authorization = request.headers.authorization;
+      if (!authorization?.startsWith("Bearer "))
+        throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), {
+          code: "AUTHENTICATION_REQUIRED",
+          statusCode: 401,
+        });
+      const principal = await authService.authenticate(authorization.slice(7));
+      return { userId: principal.userId };
+    },
+  },
+  platformCompletion: {
+    service: platformCompletionService,
+    authenticate: async (request) => {
+      const authorization = request.headers.authorization;
+      if (!authorization?.startsWith("Bearer ")) throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), { code: "AUTHENTICATION_REQUIRED", statusCode: 401 });
+      const principal = await authService.authenticate(authorization.slice(7));
+      return { userId: principal.userId };
+    },
+  },
+  guidedTraining: {
+    service: guidedTrainingService,
+    authenticate: async (request) => {
+      const authorization = request.headers.authorization;
+      if (!authorization?.startsWith("Bearer ")) throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), { code: "AUTHENTICATION_REQUIRED", statusCode: 401 });
+      const principal = await authService.authenticate(authorization.slice(7));
+      return { userId: principal.userId };
+    },
+  },
+  portalProjections: {
+    service: portalProjectionService,
     authenticate: async (request) => {
       const authorization = request.headers.authorization;
       if (!authorization?.startsWith("Bearer "))

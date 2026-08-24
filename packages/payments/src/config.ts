@@ -5,7 +5,7 @@ export const paymentConfigSchema=z.object({
   PAYMENT_PROVIDER:z.enum(["stripe","fake"]).default("fake"),PAYMENT_EXECUTION_ENABLED:envBoolean.default(false),
   PAYMENT_PROVIDER_ENVIRONMENT:z.enum(["test","live"]).default("test"),
   PAYMENT_PROVIDER_API_KEY:z.string().optional(),PAYMENT_PROVIDER_PUBLISHABLE_KEY:z.string().optional(),STRIPE_SECRET_KEY:z.string().optional(),STRIPE_PUBLISHABLE_KEY:z.string().optional(),
-  PAYMENT_PROVIDER_WEBHOOK_SECRET:z.string().min(16).default("fake-webhook-secret-change-me"),STRIPE_CONNECT_CLIENT_ID:z.string().optional(),
+  PAYMENT_PROVIDER_WEBHOOK_SECRET:z.string().min(16).default("fake-webhook-secret-change-me"),PAYMENT_PROVIDER_CONNECT_WEBHOOK_SECRET:z.string().min(16).optional(),STRIPE_CONNECT_CLIENT_ID:z.string().optional(),
   STRIPE_CONNECT_ACCOUNT_TYPE:z.enum(["express","standard"]).default("express"),
   STRIPE_PLATFORM_COUNTRY:z.string().length(2).default("US"),STRIPE_PLATFORM_CURRENCY:z.literal("USD").default("USD"),
   PAYMENT_METHOD_SETUP_RETURN_URL:z.string().url().default("http://localhost:5173/settings/billing"),PAYOUT_ONBOARDING_RETURN_URL:z.string().url().default("http://localhost:5173/settings/payouts"),
@@ -21,6 +21,7 @@ export const paymentConfigSchema=z.object({
 }).superRefine((v,c)=>{
   if(v.PAYMENT_EXECUTION_ENABLED&&v.PAYMENT_PROVIDER==="stripe"&&!(v.PAYMENT_PROVIDER_API_KEY??v.STRIPE_SECRET_KEY))
     c.addIssue({code:"custom",message:"Enabled Stripe execution requires an API key"});
+  if(v.NODE_ENV==="production"&&v.PAYMENT_PROVIDER==="stripe"&&!v.PAYMENT_PROVIDER_CONNECT_WEBHOOK_SECRET)c.addIssue({code:"custom",message:"Production Stripe Connect requires PAYMENT_PROVIDER_CONNECT_WEBHOOK_SECRET"});
   if(v.NODE_ENV==="production"&&v.PAYMENT_PROVIDER!=="stripe")c.addIssue({code:"custom",message:"Fake payment provider is forbidden in production"});
   if(v.NODE_ENV==="production"&&v.PAYMENT_PROVIDER_ENVIRONMENT!=="live")c.addIssue({code:"custom",message:"Production requires live provider environment"});
   if(v.NODE_ENV==="production"&&(v.PAYMENT_PROVIDER_API_KEY??v.STRIPE_SECRET_KEY)?.startsWith("sk_test_"))c.addIssue({code:"custom",message:"Stripe test key rejected in production"});

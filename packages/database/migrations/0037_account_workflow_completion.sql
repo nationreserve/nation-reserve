@@ -1,0 +1,12 @@
+BEGIN;
+ALTER TABLE organization_invitations DROP CONSTRAINT IF EXISTS organization_invitations_status_check;
+ALTER TABLE organization_invitations ADD CONSTRAINT organization_invitations_status_check CHECK (status IN ('pending','accepted','declined','expired','revoked'));
+ALTER TABLE organization_invitations ADD COLUMN IF NOT EXISTS declined_at timestamptz;
+ALTER TABLE organization_invitations ADD COLUMN IF NOT EXISTS declined_by_user_id uuid REFERENCES users(id);
+CREATE TABLE IF NOT EXISTS user_account_preferences(user_id uuid PRIMARY KEY REFERENCES users(id),preferences jsonb NOT NULL DEFAULT '{}',version integer NOT NULL DEFAULT 1 CHECK(version>0),updated_at timestamptz NOT NULL DEFAULT now());
+CREATE TABLE IF NOT EXISTS account_deletion_requests(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid NOT NULL REFERENCES users(id),status text NOT NULL DEFAULT 'requested' CHECK(status IN('requested','identity_restricted','retention_review','scheduled','cancelled','completed','rejected')),reason text,retention_disclosure_version text NOT NULL,requested_at timestamptz NOT NULL DEFAULT now(),recovery_expires_at timestamptz NOT NULL,cancelled_at timestamptz,completed_at timestamptz,reviewed_by_user_id uuid REFERENCES users(id),review_notes text,CHECK(recovery_expires_at>requested_at));
+CREATE UNIQUE INDEX IF NOT EXISTS account_deletion_requests_active_unique ON account_deletion_requests(user_id) WHERE status IN('requested','identity_restricted','retention_review','scheduled');
+CREATE INDEX IF NOT EXISTS portal_work_orders_discovery_idx ON portal_domain_resources(resource_type,status,updated_at DESC) WHERE archived_at IS NULL AND resource_type='work_order';
+CREATE INDEX IF NOT EXISTS portal_opportunities_manufacturer_idx ON portal_domain_resources((data->>'manufacturerOrganizationId'),updated_at DESC) WHERE archived_at IS NULL AND resource_type='opportunity';
+INSERT INTO permission_definitions(permission_key,description) VALUES('account.organization.create','Create an organization for the authenticated account'),('account.preferences.write','Manage personal application preferences'),('account.deletion.request','Request governed account deletion') ON CONFLICT DO NOTHING;
+COMMIT;

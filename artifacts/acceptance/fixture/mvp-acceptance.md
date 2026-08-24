@@ -1,12 +1,12 @@
 # MVP Acceptance Evidence
 
 Status: **PASSED**  
-Started: 2026-08-11T01:05:00.939Z  
-Completed: 2026-08-11T01:05:01.614Z
+Started: 2026-08-11T02:39:53.525Z  
+Completed: 2026-08-11T02:39:55.642Z
 
 | Stage | Status | Duration | Exit |
 |---|---|---:|---:|
-| fixture | passed | 195 ms | 0 |
+| fixture | passed | 526 ms | 0 |
 
 ## Blocking stages
 
@@ -14,27 +14,26 @@ Completed: 2026-08-11T01:05:01.614Z
 
 ## Placeholder findings
 
+- `apps/api/src/portal-projection-routes.test.ts:20` — const app=Fastify(), mock=service();
+- `apps/api/src/portal-projection-routes.test.ts:21` — await registerPortalProjectionRoutes(app as never,{service:mock as never,authenticate:async()=>({userId:"00000000-0000-4000-8000-000000000001"})});
+- `apps/api/src/portal-projection-routes.test.ts:24` — expect(mock.ownerDashboard).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001","00000000-0000-4000-8000-000000000002");
+- `apps/api/src/portal-projection-routes.test.ts:28` — const app=Fastify(),mock=service(); await registerPortalProjectionRoutes(app as never,{service:mock as never,authenticate:async()=>({userId:"00000000-0000-4000-8000-000000000001"})});
+- `apps/api/src/portal-projection-routes.test.ts:30` — expect(response.statusCode).toBe(200);expect(mock.createOrganization).toHaveBeenCalled();await app.close();
+- `apps/api/src/portal-projection-routes.test.ts:32` — it("rejects malformed organization creation before persistence",async()=>{const app=Fastify(),mock=service();await registerPortalProjectionRoutes(app as never,{service:mock as never,authenticate:async()=>({userId:"00000000-0000-4000-8000-00
 - `apps/api/src/postgres-acceptance-service.test.ts:2` — describe("acceptance waiver step-up",()=>{it("rejects a caller token without a matching session-bound grant",async()=>{const query=vi.fn().mockResolvedValueOnce({rowCount:1,rows:[{}]}).mockResolvedValueOnce({rowCount:0,rows:[]});const servi
 - `apps/web/src/AcceptancePage.test.tsx:3` — vi.mock("./auth-client.js", () => ({ api: { get: vi.fn((path: string) => Promise.resolve(path.endsWith("overview") ? { launch_blockers: 3, open_gaps: 5, active_waivers: 0, last_run: { status: "blocked", started_at: "2026-08-04T00:00:00Z" } 
 - `apps/web/src/CompanyPages.accessibility.test.tsx:5` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn().mockResolvedValue({items:[]}),post:vi.fn()}}));afterEach(()=>cleanup());
 - `apps/web/src/CompanyPages.responsive.test.tsx:5` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn().mockResolvedValue({items:[]}),post:vi.fn()}}));afterEach(()=>cleanup());
 - `apps/web/src/CompanyPages.test.tsx:5` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn(),post:vi.fn()}}));
-- `apps/web/src/CompanyPages.tsx:22` — function StructuredResource({kind,path}:{kind:keyof typeof resourceInfo;path:string}){const info=resourceInfo[kind]!,id=path.match(new RegExp(`/company/${kind}/([^/]+)`))?.[1],isForm=path.endsWith("/new")||path.endsWith("/edit"),state=useLo
-- `apps/web/src/CompanyPages.tsx:25` — function JobBuilder({path}:{path:string}){const section=path.split("/").at(-1)??"overview";const groups=["Primary responsibilities","Secondary responsibilities","Conditional responsibilities","Prohibited activities","Human supervision","Sta
-- `apps/web/src/CompanyPages.tsx:26` — function Training({path}:{path:string}){const equipment=path.includes("equipment"),uploads=path.includes("uploads"),packages=path.includes("packages"),sessions=path.includes("sessions"),title=equipment?"Motion-training equipment":uploads?"T
-- `apps/web/src/CompanyPages.tsx:28` — function Sourcing({path}:{path:string}){const messages=path.includes("messages")||path.includes("conversations"),manufacturer=path.includes("manufacturers"),opportunity=path.includes("opportunities");return <Page title={messages?"Private ma
 - `apps/web/src/ManufacturerPages.responsive.test.tsx:2` — import{afterEach,describe,expect,it,vi}from"vitest";import{cleanup,render,screen}from"@testing-library/react";import{ManufacturerPage}from"./ManufacturerPages.js";vi.mock("./auth-client.js",()=>({api:{get:vi.fn().mockResolvedValue({items:[]
 - `apps/web/src/ManufacturerPages.test.tsx:2` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn(),post:vi.fn()}}));beforeEach(()=>{sessionStorage.setItem("nr-active-organization","00000000-0000-4000-8000-000000000017");vi.mocked(api.get).mockResolvedValue({items:[]})});afterEach(()=>{cle
-- `apps/web/src/ManufacturerPages.tsx:16` — function WorkOrders({path}:{path:string}){const id=path.match(/\/work-orders\/([^/]+)/)?.[1],action=path.split("/").at(-1);return <Page title={id&&!['map','saved'].includes(id)?"Open work-order detail":"Open work-order discovery"} descripti
-- `apps/web/src/ManufacturerPages.tsx:18` — function Messaging({path}:{path:string}){return <Page title={path.includes("contracts")?"Contract participant messages":"Private company conversations"} description="Authorized private communication with explicit participant visibility."><G
 - `apps/web/src/MarketplacePages.test.tsx:7` — vi.mock("./auth-client.js", () => ({ api: { get: vi.fn(), post: vi.fn() } }));
 - `apps/web/src/MarketplacePages.test.tsx:80` — it("renders a useful empty state rather than a mock success", async () => {
-- `apps/web/src/MarketplacePages.tsx:90` — placeholder="Search by manufacturer or robot model"
+- `apps/web/src/MarketplacePages.tsx:91` — placeholder="Search by manufacturer or robot model"
 - `apps/web/src/OwnerPages.accessibility.test.tsx:6` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn(),post:vi.fn()}}));
 - `apps/web/src/OwnerPages.responsive.test.tsx:5` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn().mockResolvedValue({items:[]}),post:vi.fn()}}));
 - `apps/web/src/OwnerPages.test.tsx:5` — vi.mock("./auth-client.js",()=>({api:{get:vi.fn(),post:vi.fn()}}));
-- `apps/web/src/OwnerPages.tsx:20` — function Dashboard(){const id=org(),state=useData(id?`/api/v1/organizations/${id}/earnings/summary`:undefined),v=object(state.data);return <Page title="Robot Owner dashboard" description="Robots, verified operation, earnings readiness, and 
-- `apps/web/src/OwnerPages.tsx:21` — function Robots(){return <Page title="Robots" description="The central inventory for robots owned by the active organization."><div className="owner-toolbar"><input aria-label="Search by serial number" placeholder="Search serial number"/><s
+- `apps/web/src/OwnerPages.tsx:21` — function Robots(){const id=org(),[search,setSearch]=useState(""),state=useData(id?`/api/v1/organizations/${id}/owner/robots${search?`?search=${encodeURIComponent(search)}`:""}`:undefined);return <Page title="Robots" description="The central
 - `apps/web/src/PublicPages.tsx:991` — placeholder="Try “verified time” or “queue"
 - `apps/web/src/PublicPages.tsx:1047` — Placeholder links are intentionally not published.
 - `apps/web/src/PublicPages.tsx:1071` — Med Pool is not implemented and this overview is not medical advice, an
@@ -48,5 +47,12 @@ Completed: 2026-08-11T01:05:01.614Z
 - `docs/appendix-i-website.md:493` — Do not display placeholder statistics in production.
 - `docs/appendix-m-expanded-immutable-rules.md:1189` — ## Rule M-084 — No Placeholder Production Statistics
 - `docs/appendix-m-expanded-immutable-rules.md:1195` — Placeholder or fabricated statistics must not appear in production.
+- `docs/complete-product-audit-2026-08-10.md:84` — - Company/Manufacturer messaging mock screens were replaced on canonical routes.
+- `docs/complete-product-audit-2026-08-10.md:85` — - Manufacturer discovery mock was replaced on the canonical Company route.
+- `docs/complete-product-audit-2026-08-10.md:155` — 1. Manufacturer discovery and messaging were documented but mock-only: fixed with production API/service/UI and migration 0036.
+- `docs/complete-product-audit-2026-08-10.md:163` — 2. Manufacturer directory and conversation placeholder notices: canonical routes now connected.
+- `docs/complete-product-audit-2026-08-10.md:298` — | Are mock-only financial actions remaining? | NO — no known fake-success financial action; external execution is disabled without configuration |
+- `docs/complete-product-audit-2026-08-10.md:299` — | Are placeholder pages remaining? | YES — gap |
+- `docs/complete-product-audit-2026-08-10.md:307` — RoboWorkPool is ready for **external Stripe/Supabase configuration and staged test-mode integration work**, but it is **not ready for production or an unqualified realistic end-to-end acceptance run**. Apply migration 0036, configure extern
 - `docs/platform-integration-audit.md:7` — Placeholder scans are produced by `pnpm acceptance:mvp`. Matches are evidence for review; documentation using words such as “temporary” is not automatically a product stub. Primary workflow markers must be classified in the generated report
 - `docs/specification/user-explanations.yaml:3` — - {explanation_id: EXP-FIN-VERIFIED, audience: [public_visitor, robot_owner, hiring_company], topic: "Verified operating pricing", purpose: "Separate verified operation from schedule and activation.", required_message: "Only verified operat

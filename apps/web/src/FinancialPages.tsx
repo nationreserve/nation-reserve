@@ -1,4 +1,5 @@
 import {useEffect,useState} from "react";import {api} from "./auth-client.js";
+import {DataView} from "./DataView.js";
 export function FinancialPage({path}:{path:string}){const[data,setData]=useState<unknown>();
   const organizationId=sessionStorage.getItem("currentOrganizationId"),platform=path.startsWith("/platform");
   useEffect(()=>{const endpoint=route(path,organizationId);if(endpoint)void api.get(endpoint).then(setData)
@@ -17,7 +18,7 @@ export function FinancialPage({path}:{path:string}){const[data,setData]=useState
       <article><span>Held</span><strong>{money(data,"held_minor_units")}</strong></article></div>
     <h2>{path.includes("journal")?"Journal entries":path.includes("reconciliation")?
       "Reconciliation exceptions":path.includes("settlement")?"Settlement preparation":"Financial records"}</h2>
-    <pre>{JSON.stringify(data??{},null,2)}</pre></section></main>;}
+    <DataView data={data??{}}/></section></main>;}
 function route(path:string,organizationId:string|null){if(path.startsWith("/platform")){
   if(path.includes("journal"))return"/api/v1/platform/journal-entries";
   if(path.includes("reconciliation"))return"/api/v1/platform/reconciliation-runs";

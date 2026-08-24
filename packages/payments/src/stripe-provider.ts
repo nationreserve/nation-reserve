@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-argument, @typescript-eslint/require-await, @typescript-eslint/no-unnecessary-type-assertion */
-import{createHmac,timingSafeEqual}from"node:crypto";
-import{PaymentProviderError,type ProviderResult,type VerifiedWebhookEvent}from"./provider.js";
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
+import{PaymentProviderError,type ProviderResult}from"./provider.js";
+import{verifyStripeWebhook}from"./stripe-webhook-verifier.js";
 export class StripePaymentProvider{
   readonly name="stripe";
-  constructor(readonly environment:"test"|"live",private readonly apiKey:string,private readonly webhookSecret:string,private readonly timeoutMs=15000){}
+  constructor(readonly environment:"test"|"live",private readonly apiKey:string,private readonly webhookSecret:string,private readonly connectWebhookSecret?:string,private readonly timeoutMs=15000){}
   private async request(method:"GET"|"POST",path:string,body?:URLSearchParams,key?:string){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),this.timeoutMs);
     try{const headers:Record<string,string>={authorization:`Bearer ${this.apiKey}`};if(body)headers["content-type"]="application/x-www-form-urlencoded";if(key)headers["idempotency-key"]=key;
       const response=await fetch(`https://api.stripe.com/v1/${path}`,{method,headers,...(body?{body}:{}),signal:controller.signal});const json=await response.json()as Record<string,any>;
@@ -26,5 +26,7 @@ export class StripePaymentProvider{
   async retrieveRefund(i:{providerRefundId:string}){const r=await this.get(`refunds/${encodeURIComponent(i.providerRefundId)}`);const status:"succeeded"|"failed"|"processing"=r.status==="succeeded"?"succeeded":r.status==="failed"?"failed":"processing";return{providerObjectId:String(r.id),status};}
   async cancelPayment(i:{providerPaymentId:string;idempotencyKey:string}){const r=await this.post(`payment_intents/${encodeURIComponent(i.providerPaymentId)}/cancel`,new URLSearchParams(),i.idempotencyKey);return{providerObjectId:String(r.id),status:"failed" as const};}
   private paymentResult(r:Record<string,any>):ProviderResult{const state=String(r.status);return{providerObjectId:String(r.id),status:state==="succeeded"?"succeeded":state==="requires_action"?"requires_action":state==="canceled"?"failed":"processing",...(r.client_secret?{clientSecret:String(r.client_secret)}:{})};}
-  async verifyWebhook(i:{rawBody:Buffer;signature:string}){const parts=Object.fromEntries(i.signature.split(",").map(v=>v.split("=")as[string,string])),timestamp=parts.t,signature=parts.v1;if(!timestamp||!signature)throw new Error("PAYMENT_WEBHOOK_SIGNATURE_INVALID");if(Math.abs(Date.now()/1000-Number(timestamp))>300)throw new Error("PAYMENT_WEBHOOK_TIMESTAMP_INVALID");const expected=createHmac("sha256",this.webhookSecret).update(`${timestamp}.${i.rawBody.toString("utf8")}`).digest("hex"),a=Buffer.from(expected),b=Buffer.from(signature);if(a.length!==b.length||!timingSafeEqual(a,b))throw new Error("PAYMENT_WEBHOOK_SIGNATURE_INVALID");const e=JSON.parse(i.rawBody.toString("utf8"))as any;return{id:String(e.id),type:String(e.type),createdAt:new Date(Number(e.created)*1000),environment:e.livemode?"live":"test",objectId:String(e.data.object.id),status:String(e.data.object.status??e.type),amountMinorUnits:Number(e.data.object.amount??0),currency:String(e.data.object.currency??"usd").toUpperCase(),feeMinorUnits:e.data.object.fee?Number(e.data.object.fee):undefined,metadata:{...Object.fromEntries(Object.entries(e.data.object.metadata??{}).map(([k,v])=>[k,String(v)])),paymentIntentId:String(e.data.object.payment_intent??""),chargeId:String(e.data.object.charge??""),detailsSubmitted:String(Boolean(e.data.object.details_submitted)),transfersEnabled:String(e.data.object.capabilities?.transfers==="active"),payoutsEnabled:String(Boolean(e.data.object.payouts_enabled)),requirements:JSON.stringify(e.data.object.requirements?.currently_due??[])}}as VerifiedWebhookEvent;}
-}
+  async verifyWebhook(i:{rawBody:Buffer;signature:string}){
+    if(!this.connectWebhookSecret)throw new Error("PAYMENT_WEBHOOK_CONNECT_SECRET_REQUIRED");
+    return verifyStripeWebhook({rawBody:i.rawBody,signature:i.signature,platformSecret:this.webhookSecret,connectSecret:this.connectWebhookSecret,expectedEnvironment:this.environment});
+  }}

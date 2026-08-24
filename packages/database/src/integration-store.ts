@@ -123,8 +123,8 @@ class PostgresIntegrationRepositories implements IntegrationRepositories {
     [value.robotId, value.ownerId, value.transferCodeId, value.actorId])).rows[0];
     const ownership = (await this.client.query(`INSERT INTO robot_ownership_records
       (robot_id,owner_organization_id,ownership_status,ownership_start_at,acquisition_method,
-       source_reference,verification_method,approved_by_user_id,verified_at)
-      VALUES($1,$2,'verified',now(),'transfer_code',$3,'manufacturer_transfer_code',$4,now())
+       source_reference,verification_method,approved_by_user_id)
+      VALUES($1,$2,'verified',now(),'transfer_code',$3,'manufacturer_transfer_code',$4)
       RETURNING id`, [value.robotId, value.ownerId, claim.id, value.actorId])).rows[0];
     return { claimId: claim.id as string, ownershipId: ownership.id as string };
   }

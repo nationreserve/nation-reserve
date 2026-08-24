@@ -32,6 +32,7 @@ async function refresh() {
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: object, headers?: HeadersInit) => request<T>(path, { method: "POST", body: JSON.stringify(body ?? {}), ...(headers ? { headers } : {}) }),
+  put: <T>(path: string, body: object) => request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: object) => request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
   delete: (path: string) => request<void>(path, { method: "DELETE" }),
   login: async (email: string, password: string) => {

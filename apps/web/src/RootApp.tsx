@@ -1,9 +1,10 @@
 import { PlatformApp } from "./PlatformApp.js";
 import { isOwnerRoute, OwnerPortalApp } from "./OwnerPages.js";
-import { CompanyPortalApp, isCompanyRoute } from "./CompanyPages.js";
+import { CompanyPortalApp } from "./CompanyPages.js";
+import { isCompanyRoute, isExpansionRoute } from "./route-predicates.js";
 import { isManufacturerRoute, ManufacturerPortalApp } from "./ManufacturerPages.js";
 import { isTimelineRoute, TimelineRouteApp } from "./ActivityTimeline.js";
-import { ExpansionPage, isExpansionRoute } from "./ExpansionPages.js";
+import { ExpansionPage } from "./ExpansionPages.js";
 import { FinancialSettings } from "./FinancialSettings.js";
 import { ManufacturerFinance } from "./ManufacturerFinance.js";
 import { FinanceAdmin } from "./FinanceAdmin.js";

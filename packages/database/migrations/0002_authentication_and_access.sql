@@ -1,10 +1,7 @@
 ALTER TABLE users
-  ADD COLUMN email_normalized text,
   ADD COLUMN email_verified_at timestamptz,
   ADD COLUMN last_login_at timestamptz;
 UPDATE users SET email_normalized = lower(trim(email));
-ALTER TABLE users ALTER COLUMN email_normalized SET NOT NULL;
-CREATE UNIQUE INDEX users_email_normalized_unique ON users(email_normalized);
 
 CREATE TABLE user_credentials (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

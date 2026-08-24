@@ -1,6 +1,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from "vitest";
 import {cleanup,render,screen} from "@testing-library/react";
-import {CompanyPage,isCompanyRoute} from "./CompanyPages.js";
+import {CompanyPage} from "./CompanyPages.js";
+import {isCompanyRoute} from "./route-predicates.js";
 import {api} from "./auth-client.js";
 vi.mock("./auth-client.js",()=>({api:{get:vi.fn(),post:vi.fn()}}));
 beforeEach(()=>{sessionStorage.setItem("nr-active-organization","00000000-0000-4000-8000-000000000016");vi.mocked(api.get).mockResolvedValue({items:[]})});afterEach(()=>{cleanup();vi.clearAllMocks()});

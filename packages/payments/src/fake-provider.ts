@@ -5,15 +5,15 @@ const id=(prefix:string,key:string)=>`${prefix}_${createHmac("sha256","fake").up
 export class FakePaymentProvider{
   readonly name="fake";readonly environment="test"as const;
   constructor(private readonly mode:Mode="success",private readonly webhookSecret="fake-webhook-secret"){}
-  async createCompanyCustomer(i:{idempotencyKey:string}){return{id:id("cus",i.idempotencyKey)};}
-  async createUserCustomer(i:{idempotencyKey:string}){return{id:id("cus",i.idempotencyKey)};}
-  async createPaymentMethodSetup(i:{idempotencyKey:string}){return this.result("seti",i.idempotencyKey);}
+  async createCompanyCustomer(i:{organizationId:string;email?:string;name:string;idempotencyKey:string}){return{id:id("cus",i.idempotencyKey)};}
+  async createUserCustomer(i:{userId:string;email?:string;name:string;idempotencyKey:string}){return{id:id("cus",i.idempotencyKey)};}
+  async createPaymentMethodSetup(i:{customerId:string;returnUrl:string;idempotencyKey:string}){return this.result("seti",i.idempotencyKey);}
   async retrievePaymentMethod(i:{paymentMethodId:string}){return{id:i.paymentMethodId,type:"card"as const,brand:"Visa",last4:"4242",expirationMonth:12,expirationYear:2035};}
   async createOwnerConnectedAccount(i:{idempotencyKey:string}){return{id:id("acct",i.idempotencyKey),status:"active"};}
   async createOwnerOnboardingLink(i:{accountId:string}){return{url:`https://fake.invalid/onboard/${i.accountId}`};}
   async retrieveConnectedAccount(){return{status:"active",detailsSubmitted:true,transfersEnabled:true,payoutsEnabled:true,requirements:[]};}
   async createInvoiceCollection(i:{customerId:string;paymentMethodId:string;amountMinorUnits:number;currency:"USD";idempotencyKey:string}){return this.result("pi",i.idempotencyKey);}
-  async createFundingPayment(i:{idempotencyKey:string}){return this.result("pi",i.idempotencyKey);}
+  async createFundingPayment(i:{customerId:string;paymentMethodId:string;amountMinorUnits:number;currency:"USD";idempotencyKey:string;metadata:Record<string,string>;returnUrl?:string}){return this.result("pi",i.idempotencyKey);}
   async retrievePayment(i:{providerPaymentId:string}){return{providerObjectId:i.providerPaymentId,status:"succeeded" as const};}
   async createOwnerPayout(i:{accountId:string;amountMinorUnits:number;currency:"USD";idempotencyKey:string}){return this.result("po",i.idempotencyKey,this.mode==="payout_failed");}
   async retrievePayout(i:{providerPayoutId:string}){return{providerObjectId:i.providerPayoutId,status:"paid" as const};}
