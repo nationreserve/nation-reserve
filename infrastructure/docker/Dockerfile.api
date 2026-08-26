@@ -16,5 +16,5 @@ RUN addgroup -S -g 10001 app && adduser -S -u 10001 -G app app && corepack enabl
 COPY --from=build --chown=app:app /workspace /workspace
 USER 10001
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1:3000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD wget -qO- http://127.0.0.1:${API_PORT:-3000}/ready || exit 1
 CMD ["pnpm","--filter","@nation-reserve/api","start"]

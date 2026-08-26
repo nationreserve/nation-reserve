@@ -1,0 +1,216 @@
+services:
+  - type: keyvalue
+    name: roboworkpool-production-redis
+    plan: starter
+    region: ohio
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+    persistenceMode: journal-snapshot
+
+  - type: web
+    name: roboworkpool-production-api
+    runtime: docker
+    plan: standard
+    region: ohio
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: pnpm --filter @nation-reserve/api start
+    autoDeployTrigger: off
+    healthCheckPath: /ready
+    maxShutdownDelaySeconds: 30
+    domains:
+      - api.nationreserve.com
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - fromGroup: roboworkpool-production-api-secrets
+      - fromGroup: roboworkpool-production-heartbeat-secrets
+      - key: API_HOST
+        value: 0.0.0.0
+      - key: API_PORT
+        value: "10000"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: worker
+    name: roboworkpool-production-cache-invalidation
+    runtime: docker
+    plan: starter
+    region: ohio
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/cache-invalidation-worker.js
+    autoDeployTrigger: off
+    maxShutdownDelaySeconds: 30
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-heartbeat-offline
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "* * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/offline-worker.js
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - fromGroup: roboworkpool-production-heartbeat-secrets
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-financial-finalization
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "* * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/financial-finalization-worker.js
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-allocation-expiration
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "* * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/allocation-expiration-command.js
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-allocation-reminders
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "* * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/allocation-reminder-command.js
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-scheduled-reports
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "* * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/scheduled-report-worker.js
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-reporting-refresh
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "*/15 * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/reporting-worker.js
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-operations-alerts
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "*/5 * * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/operations-command.js evaluate-alerts
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-invoice-generation
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "0 2 * * *"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/financial-command.js generate-invoices
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString
+
+  - type: cron
+    name: roboworkpool-production-statement-generation
+    runtime: docker
+    plan: starter
+    region: ohio
+    schedule: "0 3 * * 1"
+    dockerfilePath: ./infrastructure/docker/Dockerfile.api
+    dockerContext: .
+    dockerCommand: node apps/api/dist/financial-command.js generate-statements
+    autoDeployTrigger: off
+    envVars:
+      - fromGroup: roboworkpool-production-runtime
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: roboworkpool-production-redis
+          property: connectionString

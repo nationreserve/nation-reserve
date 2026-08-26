@@ -1,4 +1,4 @@
-import { DevelopmentEmailAdapter, parseAuthEnvironment } from "@nation-reserve/auth";
+import { createAuthEmailAdapter, parseAuthEnvironment } from "@nation-reserve/auth";
 import { parseIntegrationEnvironment } from "@nation-reserve/robot-integration";
 import { heartbeatConfigSchema as parseHeartbeat } from "@nation-reserve/heartbeat-domain";
 import { financialConfigSchema } from "@nation-reserve/financial-domain";
@@ -85,7 +85,7 @@ for (const [index, result] of connectionResults.entries()) {
 const authService = new PostgresAuthRouteService(
   dependencies.postgres.pool,
   authConfig,
-  new DevelopmentEmailAdapter(config.NODE_ENV),
+  createAuthEmailAdapter(process.env),
   config.NODE_ENV === "development",
 );
 const integrationService = new PostgresIntegrationRouteService(
@@ -148,9 +148,17 @@ const manufacturerFinancialService = new PostgresManufacturerFinancialService(
   },
 );
 const marketplaceService = new PostgresMarketplaceService(dependencies.postgres.pool);
-const portalProjectionService = new PostgresPortalProjectionService(dependencies.postgres.pool);
-const guidedTrainingService = new PostgresGuidedTrainingService(dependencies.postgres.pool, dependencies.objectStorage);
-const platformCompletionService = new PostgresPlatformCompletionService(dependencies.postgres.pool, dependencies.objectStorage);
+const portalProjectionService = new PostgresPortalProjectionService(
+  dependencies.postgres.pool,
+);
+const guidedTrainingService = new PostgresGuidedTrainingService(
+  dependencies.postgres.pool,
+  dependencies.objectStorage,
+);
+const platformCompletionService = new PostgresPlatformCompletionService(
+  dependencies.postgres.pool,
+  dependencies.objectStorage,
+);
 const userFinancialService = new PostgresUserFinancialService(
   dependencies.postgres.pool,
   paymentProvider,
@@ -202,7 +210,11 @@ const app = await createApp({
     service: platformCompletionService,
     authenticate: async (request) => {
       const authorization = request.headers.authorization;
-      if (!authorization?.startsWith("Bearer ")) throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), { code: "AUTHENTICATION_REQUIRED", statusCode: 401 });
+      if (!authorization?.startsWith("Bearer "))
+        throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), {
+          code: "AUTHENTICATION_REQUIRED",
+          statusCode: 401,
+        });
       const principal = await authService.authenticate(authorization.slice(7));
       return { userId: principal.userId };
     },
@@ -211,7 +223,11 @@ const app = await createApp({
     service: guidedTrainingService,
     authenticate: async (request) => {
       const authorization = request.headers.authorization;
-      if (!authorization?.startsWith("Bearer ")) throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), { code: "AUTHENTICATION_REQUIRED", statusCode: 401 });
+      if (!authorization?.startsWith("Bearer "))
+        throw Object.assign(new Error("AUTHENTICATION_REQUIRED"), {
+          code: "AUTHENTICATION_REQUIRED",
+          statusCode: 401,
+        });
       const principal = await authService.authenticate(authorization.slice(7));
       return { userId: principal.userId };
     },
