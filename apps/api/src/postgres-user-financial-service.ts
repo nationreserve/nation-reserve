@@ -10,11 +10,21 @@ export class PostgresUserFinancialService {
     private readonly config: {
       executionEnabled: boolean;
       returnUrl: string;
+      identityReturnUrl: string;
       connectReturnUrl: string;
       connectRefreshUrl: string;
       country: string;
     },
   ) {}
+  private async requireVerifiedIdentity(userId: string) {
+    const row = (
+      await this.pool.query(
+        "SELECT 1 FROM individual_identity_verifications WHERE user_id=$1 AND status='verified'",
+        [userId],
+      )
+    ).rows[0];
+    if (!row) throw fail("IDENTITY_VERIFICATION_REQUIRED", 403);
+  }
   async profile(userId: string) {
     const user = (
       await this.pool.query(
@@ -44,6 +54,41 @@ export class PostgresUserFinancialService {
     }
     return this.safeProfile(profile);
   }
+  async identityStatus(userId: string) {
+    const row = (
+      await this.pool.query(
+        `SELECT id,status,last_error_code "lastErrorCode",verified_at "verifiedAt",created_at "createdAt",updated_at "updatedAt"
+         FROM individual_identity_verifications WHERE user_id=$1
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId],
+      )
+    ).rows[0];
+    return row ?? { status: "unverified" };
+  }
+  async startIdentityVerification(userId: string, key: string) {
+    if (!this.config.executionEnabled) throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    const current = await this.identityStatus(userId);
+    if (current.status === "verified") return current;
+    if (current.status === "pending") return current;
+    const remote = await this.provider.createIdentityVerificationSession({
+      userId,
+      returnUrl: this.config.identityReturnUrl,
+      idempotencyKey: key,
+    });
+    const row = (
+      await this.pool.query(
+        `INSERT INTO individual_identity_verifications(
+           user_id,provider,provider_environment,provider_session_id,status
+         ) VALUES($1,$2,$3,$4,'pending')
+         ON CONFLICT(provider,provider_environment,provider_session_id)
+         DO UPDATE SET updated_at=now()
+         RETURNING id,status,created_at "createdAt",updated_at "updatedAt"`,
+        [userId, this.provider.name, this.provider.environment, remote.id],
+      )
+    ).rows[0];
+    return { ...row, url: remote.url };
+  }
+
   async paymentMethods(userId: string) {
     await this.profile(userId);
     return {
@@ -176,6 +221,7 @@ export class PostgresUserFinancialService {
     },
   ) {
     if (!this.config.executionEnabled) throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    await this.requireVerifiedIdentity(userId);
     const p = await this.profile(userId),
       method = (
         await this.pool.query(
@@ -308,6 +354,7 @@ export class PostgresUserFinancialService {
     };
   }
   async payoutOnboarding(userId: string, key: string) {
+    await this.requireVerifiedIdentity(userId);
     let p = await this.profile(userId);
     if (!p.stripeConnectedAccountId) {
       const remote = await this.provider.createOwnerConnectedAccount({

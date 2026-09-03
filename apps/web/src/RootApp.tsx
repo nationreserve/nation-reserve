@@ -6,6 +6,8 @@ import { isManufacturerRoute, ManufacturerPortalApp } from "./ManufacturerPages.
 import { isTimelineRoute, TimelineRouteApp } from "./ActivityTimeline.js";
 import { ExpansionPage } from "./ExpansionPages.js";
 import { FinancialSettings } from "./FinancialSettings.js";
+import { IdentityVerificationPage } from "./IdentityVerificationPage.js";
+import { OrganizationVerificationPage } from "./OrganizationVerificationPage.js";
 import { ManufacturerFinance } from "./ManufacturerFinance.js";
 import { FinanceAdmin } from "./FinanceAdmin.js";
 import { isMarketplaceRoute, MarketplacePage } from "./MarketplacePages.js";
@@ -16,6 +18,10 @@ export function RootApp() {
   if (location.pathname === "/manufacturer/payments-payouts")
     return <ManufacturerFinance />;
   if (location.pathname === "/account/payments-banking") return <FinancialSettings />;
+  if (location.pathname === "/account/verification")
+    return <IdentityVerificationPage />;
+  if (location.pathname === "/organization/verification")
+    return <OrganizationVerificationPage />;
   if (isExpansionRoute(location.pathname))
     return <ExpansionPage path={location.pathname} />;
   if (isTimelineRoute(location.pathname)) return <TimelineRouteApp />;

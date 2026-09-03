@@ -1,32 +1,323 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call */
-import{PaymentProviderError,type ProviderResult}from"./provider.js";
-import{verifyStripeWebhook}from"./stripe-webhook-verifier.js";
-export class StripePaymentProvider{
-  readonly name="stripe";
-  constructor(readonly environment:"test"|"live",private readonly apiKey:string,private readonly webhookSecret:string,private readonly connectWebhookSecret?:string,private readonly timeoutMs=15000){}
-  private async request(method:"GET"|"POST",path:string,body?:URLSearchParams,key?:string){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),this.timeoutMs);
-    try{const headers:Record<string,string>={authorization:`Bearer ${this.apiKey}`};if(body)headers["content-type"]="application/x-www-form-urlencoded";if(key)headers["idempotency-key"]=key;
-      const response=await fetch(`https://api.stripe.com/v1/${path}`,{method,headers,...(body?{body}:{}),signal:controller.signal});const json=await response.json()as Record<string,any>;
-      if(!response.ok)throw new PaymentProviderError("PAYMENT_PROVIDER_REJECTED",String(json.error?.code??"Provider rejected request"));return json;
-    }catch(error){if(error instanceof DOMException&&error.name==="AbortError")throw new PaymentProviderError("PAYMENT_PROVIDER_TIMEOUT","Provider outcome unknown","unknown");throw error;}finally{clearTimeout(timer);}}
-  private post(path:string,body:URLSearchParams,key:string){return this.request("POST",path,body,key);} private get(path:string){return this.request("GET",path);}
-  async createCompanyCustomer(i:{organizationId:string;email?:string;name:string;idempotencyKey:string}){const b=new URLSearchParams({name:i.name,"metadata[organization_id]":i.organizationId});if(i.email)b.set("email",i.email);const r=await this.post("customers",b,i.idempotencyKey);return{id:String(r.id)};}
-  async createUserCustomer(i:{userId:string;email?:string;name:string;idempotencyKey:string}){const b=new URLSearchParams({name:i.name,"metadata[user_id]":i.userId});if(i.email)b.set("email",i.email);const r=await this.post("customers",b,i.idempotencyKey);return{id:String(r.id)};}
-  async createPaymentMethodSetup(i:{customerId:string;returnUrl:string;idempotencyKey:string}){const r=await this.post("setup_intents",new URLSearchParams({customer:i.customerId,"payment_method_types[0]":"card","payment_method_types[1]":"us_bank_account",usage:"off_session"}),i.idempotencyKey);return{providerObjectId:String(r.id),status:"submitted" as const,clientSecret:String(r.client_secret)};}
-  async retrievePaymentMethod(i:{paymentMethodId:string}){const r=await this.get(`payment_methods/${encodeURIComponent(i.paymentMethodId)}`),card=r.card,bank=r.us_bank_account;return{id:String(r.id),type:r.type==="us_bank_account"?"us_bank_account" as const:"card" as const,...(card?{brand:String(card.brand),last4:String(card.last4),expirationMonth:Number(card.exp_month),expirationYear:Number(card.exp_year)}:{}),...(bank?{brand:String(bank.bank_name??"Bank"),last4:String(bank.last4)}:{})};}
-  async createOwnerConnectedAccount(i:{organizationId:string;country:string;idempotencyKey:string}){const r=await this.post("accounts",new URLSearchParams({type:"express",country:i.country,"metadata[organization_id]":i.organizationId}),i.idempotencyKey);return{id:String(r.id),status:"onboarding"};}
-  async createOwnerOnboardingLink(i:{accountId:string;returnUrl:string;refreshUrl:string}){const r=await this.post("account_links",new URLSearchParams({account:i.accountId,return_url:i.returnUrl,refresh_url:i.refreshUrl,type:"account_onboarding"}),`link-${i.accountId}-${Date.now()}`);return{url:String(r.url)};}
-  async retrieveConnectedAccount(i:{accountId:string}){const r=await this.get(`accounts/${encodeURIComponent(i.accountId)}`);return{status:r.payouts_enabled?"active":r.details_submitted?"pending_verification":"onboarding",detailsSubmitted:Boolean(r.details_submitted),transfersEnabled:Boolean(r.capabilities?.transfers==="active"),payoutsEnabled:Boolean(r.payouts_enabled),requirements:(r.requirements?.currently_due??[]).map(String)};}
-  async createInvoiceCollection(i:{customerId:string;paymentMethodId:string;amountMinorUnits:number;currency:"USD";idempotencyKey:string}){const r=await this.post("payment_intents",new URLSearchParams({customer:i.customerId,payment_method:i.paymentMethodId,amount:String(i.amountMinorUnits),currency:"usd",confirm:"true",off_session:"true"}),i.idempotencyKey);const status:"submitted"|"processing"=String(r.status)==="succeeded"?"submitted":"processing";return{providerObjectId:String(r.id),status};}
-  async createFundingPayment(i:{customerId:string;paymentMethodId:string;amountMinorUnits:number;currency:"USD";idempotencyKey:string;metadata:Record<string,string>;returnUrl?:string}){const b=new URLSearchParams({customer:i.customerId,payment_method:i.paymentMethodId,amount:String(i.amountMinorUnits),currency:"usd",confirm:"true"});for(const[k,v]of Object.entries(i.metadata))b.set(`metadata[${k}]`,v);if(i.returnUrl)b.set("return_url",i.returnUrl);const r=await this.post("payment_intents",b,i.idempotencyKey);return this.paymentResult(r);}
-  async retrievePayment(i:{providerPaymentId:string}){const r=await this.get(`payment_intents/${encodeURIComponent(i.providerPaymentId)}`);return this.paymentResult(r);}
-  async createOwnerPayout(i:{accountId:string;amountMinorUnits:number;currency:"USD";idempotencyKey:string}){const r=await this.post("transfers",new URLSearchParams({destination:i.accountId,amount:String(i.amountMinorUnits),currency:"usd"}),i.idempotencyKey);return{providerObjectId:String(r.id),status:"submitted" as const};}
-  async retrievePayout(i:{providerPayoutId:string}){const r=await this.get(`transfers/${encodeURIComponent(i.providerPayoutId)}`);return{providerObjectId:String(r.id),status:r.reversed?"failed" as const:"submitted" as const};}
-  async createRefund(i:{providerPaymentId:string;amountMinorUnits:number;idempotencyKey:string}){const r=await this.post("refunds",new URLSearchParams({payment_intent:i.providerPaymentId,amount:String(i.amountMinorUnits)}),i.idempotencyKey);return{providerObjectId:String(r.id),status:"submitted" as const};}
-  async retrieveRefund(i:{providerRefundId:string}){const r=await this.get(`refunds/${encodeURIComponent(i.providerRefundId)}`);const status:"succeeded"|"failed"|"processing"=r.status==="succeeded"?"succeeded":r.status==="failed"?"failed":"processing";return{providerObjectId:String(r.id),status};}
-  async cancelPayment(i:{providerPaymentId:string;idempotencyKey:string}){const r=await this.post(`payment_intents/${encodeURIComponent(i.providerPaymentId)}/cancel`,new URLSearchParams(),i.idempotencyKey);return{providerObjectId:String(r.id),status:"failed" as const};}
-  private paymentResult(r:Record<string,any>):ProviderResult{const state=String(r.status);return{providerObjectId:String(r.id),status:state==="succeeded"?"succeeded":state==="requires_action"?"requires_action":state==="canceled"?"failed":"processing",...(r.client_secret?{clientSecret:String(r.client_secret)}:{})};}
-  async verifyWebhook(i:{rawBody:Buffer;signature:string}){
-    if(!this.connectWebhookSecret)throw new Error("PAYMENT_WEBHOOK_CONNECT_SECRET_REQUIRED");
-    return verifyStripeWebhook({rawBody:i.rawBody,signature:i.signature,platformSecret:this.webhookSecret,connectSecret:this.connectWebhookSecret,expectedEnvironment:this.environment});
-  }}
+import { PaymentProviderError, type ProviderResult } from "./provider.js";
+import { verifyStripeWebhook } from "./stripe-webhook-verifier.js";
+export class StripePaymentProvider {
+  readonly name = "stripe";
+  constructor(
+    readonly environment: "test" | "live",
+    private readonly apiKey: string,
+    private readonly webhookSecret: string,
+    private readonly connectWebhookSecret?: string,
+    private readonly timeoutMs = 15000,
+  ) {}
+  private async request(
+    method: "GET" | "POST",
+    path: string,
+    body?: URLSearchParams,
+    key?: string,
+  ) {
+    const controller = new AbortController(),
+      timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${this.apiKey}`,
+      };
+      if (body) headers["content-type"] = "application/x-www-form-urlencoded";
+      if (key) headers["idempotency-key"] = key;
+      const response = await fetch(`https://api.stripe.com/v1/${path}`, {
+        method,
+        headers,
+        ...(body ? { body } : {}),
+        signal: controller.signal,
+      });
+      const json = (await response.json()) as Record<string, any>;
+      if (!response.ok)
+        throw new PaymentProviderError(
+          "PAYMENT_PROVIDER_REJECTED",
+          String(json.error?.code ?? "Provider rejected request"),
+        );
+      return json;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError")
+        throw new PaymentProviderError(
+          "PAYMENT_PROVIDER_TIMEOUT",
+          "Provider outcome unknown",
+          "unknown",
+        );
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  private post(path: string, body: URLSearchParams, key: string) {
+    return this.request("POST", path, body, key);
+  }
+  private get(path: string) {
+    return this.request("GET", path);
+  }
+  async createCompanyCustomer(i: {
+    organizationId: string;
+    email?: string;
+    name: string;
+    idempotencyKey: string;
+  }) {
+    const b = new URLSearchParams({
+      name: i.name,
+      "metadata[organization_id]": i.organizationId,
+    });
+    if (i.email) b.set("email", i.email);
+    const r = await this.post("customers", b, i.idempotencyKey);
+    return { id: String(r.id) };
+  }
+  async createUserCustomer(i: {
+    userId: string;
+    email?: string;
+    name: string;
+    idempotencyKey: string;
+  }) {
+    const b = new URLSearchParams({ name: i.name, "metadata[user_id]": i.userId });
+    if (i.email) b.set("email", i.email);
+    const r = await this.post("customers", b, i.idempotencyKey);
+    return { id: String(r.id) };
+  }
+  async createPaymentMethodSetup(i: {
+    customerId: string;
+    returnUrl: string;
+    idempotencyKey: string;
+  }) {
+    const r = await this.post(
+      "setup_intents",
+      new URLSearchParams({
+        customer: i.customerId,
+        "payment_method_types[0]": "card",
+        "payment_method_types[1]": "us_bank_account",
+        usage: "off_session",
+      }),
+      i.idempotencyKey,
+    );
+    return {
+      providerObjectId: String(r.id),
+      status: "submitted" as const,
+      clientSecret: String(r.client_secret),
+    };
+  }
+  async createIdentityVerificationSession(i: {
+    userId: string;
+    returnUrl: string;
+    idempotencyKey: string;
+  }) {
+    const r = await this.post(
+      "identity/verification_sessions",
+      new URLSearchParams({
+        type: "document",
+        return_url: i.returnUrl,
+        "metadata[user_id]": i.userId,
+      }),
+      i.idempotencyKey,
+    );
+    return { id: String(r.id), url: String(r.url), status: String(r.status) };
+  }
+  async retrievePaymentMethod(i: { paymentMethodId: string }) {
+    const r = await this.get(
+        `payment_methods/${encodeURIComponent(i.paymentMethodId)}`,
+      ),
+      card = r.card,
+      bank = r.us_bank_account;
+    return {
+      id: String(r.id),
+      type:
+        r.type === "us_bank_account" ? ("us_bank_account" as const) : ("card" as const),
+      ...(card
+        ? {
+            brand: String(card.brand),
+            last4: String(card.last4),
+            expirationMonth: Number(card.exp_month),
+            expirationYear: Number(card.exp_year),
+          }
+        : {}),
+      ...(bank
+        ? { brand: String(bank.bank_name ?? "Bank"), last4: String(bank.last4) }
+        : {}),
+    };
+  }
+  async createOwnerConnectedAccount(i: {
+    organizationId: string;
+    country: string;
+    idempotencyKey: string;
+  }) {
+    const r = await this.post(
+      "accounts",
+      new URLSearchParams({
+        type: "express",
+        country: i.country,
+        "metadata[organization_id]": i.organizationId,
+      }),
+      i.idempotencyKey,
+    );
+    return { id: String(r.id), status: "onboarding" };
+  }
+  async createOwnerOnboardingLink(i: {
+    accountId: string;
+    returnUrl: string;
+    refreshUrl: string;
+  }) {
+    const r = await this.post(
+      "account_links",
+      new URLSearchParams({
+        account: i.accountId,
+        return_url: i.returnUrl,
+        refresh_url: i.refreshUrl,
+        type: "account_onboarding",
+      }),
+      `link-${i.accountId}-${Date.now()}`,
+    );
+    return { url: String(r.url) };
+  }
+  async retrieveConnectedAccount(i: { accountId: string }) {
+    const r = await this.get(`accounts/${encodeURIComponent(i.accountId)}`);
+    return {
+      status: r.payouts_enabled
+        ? "active"
+        : r.details_submitted
+          ? "pending_verification"
+          : "onboarding",
+      detailsSubmitted: Boolean(r.details_submitted),
+      transfersEnabled: Boolean(r.capabilities?.transfers === "active"),
+      payoutsEnabled: Boolean(r.payouts_enabled),
+      requirements: (r.requirements?.currently_due ?? []).map(String),
+    };
+  }
+  async createInvoiceCollection(i: {
+    customerId: string;
+    paymentMethodId: string;
+    amountMinorUnits: number;
+    currency: "USD";
+    idempotencyKey: string;
+  }) {
+    const r = await this.post(
+      "payment_intents",
+      new URLSearchParams({
+        customer: i.customerId,
+        payment_method: i.paymentMethodId,
+        amount: String(i.amountMinorUnits),
+        currency: "usd",
+        confirm: "true",
+        off_session: "true",
+      }),
+      i.idempotencyKey,
+    );
+    const status: "submitted" | "processing" =
+      String(r.status) === "succeeded" ? "submitted" : "processing";
+    return { providerObjectId: String(r.id), status };
+  }
+  async createFundingPayment(i: {
+    customerId: string;
+    paymentMethodId: string;
+    amountMinorUnits: number;
+    currency: "USD";
+    idempotencyKey: string;
+    metadata: Record<string, string>;
+    returnUrl?: string;
+  }) {
+    const b = new URLSearchParams({
+      customer: i.customerId,
+      payment_method: i.paymentMethodId,
+      amount: String(i.amountMinorUnits),
+      currency: "usd",
+      confirm: "true",
+    });
+    for (const [k, v] of Object.entries(i.metadata)) b.set(`metadata[${k}]`, v);
+    if (i.returnUrl) b.set("return_url", i.returnUrl);
+    const r = await this.post("payment_intents", b, i.idempotencyKey);
+    return this.paymentResult(r);
+  }
+  async retrievePayment(i: { providerPaymentId: string }) {
+    const r = await this.get(
+      `payment_intents/${encodeURIComponent(i.providerPaymentId)}`,
+    );
+    return this.paymentResult(r);
+  }
+  async createOwnerPayout(i: {
+    accountId: string;
+    amountMinorUnits: number;
+    currency: "USD";
+    idempotencyKey: string;
+  }) {
+    const r = await this.post(
+      "transfers",
+      new URLSearchParams({
+        destination: i.accountId,
+        amount: String(i.amountMinorUnits),
+        currency: "usd",
+      }),
+      i.idempotencyKey,
+    );
+    return { providerObjectId: String(r.id), status: "submitted" as const };
+  }
+  async retrievePayout(i: { providerPayoutId: string }) {
+    const r = await this.get(`transfers/${encodeURIComponent(i.providerPayoutId)}`);
+    return {
+      providerObjectId: String(r.id),
+      status: r.reversed ? ("failed" as const) : ("submitted" as const),
+    };
+  }
+  async createRefund(i: {
+    providerPaymentId: string;
+    amountMinorUnits: number;
+    idempotencyKey: string;
+  }) {
+    const r = await this.post(
+      "refunds",
+      new URLSearchParams({
+        payment_intent: i.providerPaymentId,
+        amount: String(i.amountMinorUnits),
+      }),
+      i.idempotencyKey,
+    );
+    return { providerObjectId: String(r.id), status: "submitted" as const };
+  }
+  async retrieveRefund(i: { providerRefundId: string }) {
+    const r = await this.get(`refunds/${encodeURIComponent(i.providerRefundId)}`);
+    const status: "succeeded" | "failed" | "processing" =
+      r.status === "succeeded"
+        ? "succeeded"
+        : r.status === "failed"
+          ? "failed"
+          : "processing";
+    return { providerObjectId: String(r.id), status };
+  }
+  async cancelPayment(i: { providerPaymentId: string; idempotencyKey: string }) {
+    const r = await this.post(
+      `payment_intents/${encodeURIComponent(i.providerPaymentId)}/cancel`,
+      new URLSearchParams(),
+      i.idempotencyKey,
+    );
+    return { providerObjectId: String(r.id), status: "failed" as const };
+  }
+  private paymentResult(r: Record<string, any>): ProviderResult {
+    const state = String(r.status);
+    return {
+      providerObjectId: String(r.id),
+      status:
+        state === "succeeded"
+          ? "succeeded"
+          : state === "requires_action"
+            ? "requires_action"
+            : state === "canceled"
+              ? "failed"
+              : "processing",
+      ...(r.client_secret ? { clientSecret: String(r.client_secret) } : {}),
+    };
+  }
+  async verifyWebhook(i: { rawBody: Buffer; signature: string }) {
+    if (!this.connectWebhookSecret)
+      throw new Error("PAYMENT_WEBHOOK_CONNECT_SECRET_REQUIRED");
+    return verifyStripeWebhook({
+      rawBody: i.rawBody,
+      signature: i.signature,
+      platformSecret: this.webhookSecret,
+      connectSecret: this.connectWebhookSecret,
+      expectedEnvironment: this.environment,
+    });
+  }
+}

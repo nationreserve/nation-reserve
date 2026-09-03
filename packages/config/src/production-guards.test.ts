@@ -1,3 +1,46 @@
-import{describe,expect,it}from"vitest";import{parseApiEnv}from"./index.js";
-const base={NODE_ENV:"production",DEPLOY_ENVIRONMENT:"production",API_HOST:"0.0.0.0",API_PORT:"3000",DATABASE_URL:"postgresql://service:password@private-db.internal/roboworkpool",REDIS_URL:"redis://private-redis.internal:6379",S3_ENDPOINT:"https://s3.us-east-1.amazonaws.com",S3_REGION:"us-east-1",S3_ACCESS_KEY:"managed-identity",S3_SECRET_KEY:"managed-secret-reference",S3_BUCKET:"roboworkpool-production",WEB_ORIGIN:"https://app.example.invalid",LOG_LEVEL:"info",PAYMENT_PROVIDER:"stripe",PAYMENT_PROVIDER_ENVIRONMENT:"live",PAYMENT_EXECUTION_ENABLED:"true",PAYMENT_PROVIDER_CONNECT_WEBHOOK_SECRET:"whsec_connect_production_example",COOKIE_SECURE:"true",TIMELINE_PROJECTION_ENABLED:"true"};
-describe("production configuration guards",()=>{it("accepts an explicitly secure production configuration",()=>expect(parseApiEnv(base)).toMatchObject({NODE_ENV:"production",PAYMENT_PROVIDER:"stripe",COOKIE_SECURE:true}));it.each([["PAYMENT_PROVIDER","fake"],["PAYMENT_PROVIDER_ENVIRONMENT","test"],["PAYMENT_EXECUTION_ENABLED","false"],["COOKIE_SECURE","false"],["TIMELINE_PROJECTION_ENABLED","false"]])("rejects forbidden production %s",(key,value)=>expect(()=>parseApiEnv({...base,[key]:value})).toThrow());it("rejects insecure production origins",()=>expect(()=>parseApiEnv({...base,WEB_ORIGIN:"http://app.example.invalid"})).toThrow());});
+import { describe, expect, it } from "vitest";
+import { parseApiEnv } from "./index.js";
+const base = {
+  NODE_ENV: "production",
+  DEPLOY_ENVIRONMENT: "production",
+  API_HOST: "0.0.0.0",
+  API_PORT: "3000",
+  DATABASE_URL: "postgresql://service:password@private-db.internal/roboworkpool",
+  REDIS_URL: "redis://private-redis.internal:6379",
+  S3_ENDPOINT: "https://s3.us-east-1.amazonaws.com",
+  S3_REGION: "us-east-1",
+  S3_ACCESS_KEY: "managed-identity",
+  S3_SECRET_KEY: "managed-secret-reference",
+  S3_TRAINING_DATA_BUCKET: "training-data-private",
+  S3_MANUFACTURER_DOCUMENTS_BUCKET: "manufacturer-documents-private",
+  S3_CONTRACT_DOCUMENTS_BUCKET: "contract-documents-private",
+  WEB_ORIGIN: "https://app.example.invalid",
+  LOG_LEVEL: "info",
+  PAYMENT_PROVIDER: "stripe",
+  PAYMENT_PROVIDER_ENVIRONMENT: "live",
+  PAYMENT_EXECUTION_ENABLED: "true",
+  PAYMENT_PROVIDER_CONNECT_WEBHOOK_SECRET: "whsec_connect_production_example",
+  COOKIE_SECURE: "true",
+  TIMELINE_PROJECTION_ENABLED: "true",
+};
+describe("production configuration guards", () => {
+  it("accepts an explicitly secure production configuration", () =>
+    expect(parseApiEnv(base)).toMatchObject({
+      NODE_ENV: "production",
+      PAYMENT_PROVIDER: "stripe",
+      COOKIE_SECURE: true,
+    }));
+  it.each([
+    ["PAYMENT_PROVIDER", "fake"],
+    ["PAYMENT_PROVIDER_ENVIRONMENT", "test"],
+    ["PAYMENT_EXECUTION_ENABLED", "false"],
+    ["COOKIE_SECURE", "false"],
+    ["TIMELINE_PROJECTION_ENABLED", "false"],
+  ])("rejects forbidden production %s", (key, value) =>
+    expect(() => parseApiEnv({ ...base, [key]: value })).toThrow(),
+  );
+  it("rejects insecure production origins", () =>
+    expect(() =>
+      parseApiEnv({ ...base, WEB_ORIGIN: "http://app.example.invalid" }),
+    ).toThrow());
+});

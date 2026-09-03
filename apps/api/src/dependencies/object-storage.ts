@@ -1,11 +1,22 @@
-import { CreateBucketCommand, HeadBucketCommand, PutObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CreateBucketCommand,
+  HeadBucketCommand,
+  PutObjectCommand,
+  GetObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import type { ManagedDependency } from "./types.js";
 
 export interface ObjectStorageDependency extends ManagedDependency {
-  createUploadUrl(key: string, contentType: string, checksumSha256?: string): Promise<string>;
-  createDownloadUrl(key: string): Promise<string>;
+  createUploadUrl(
+    bucket: string,
+    key: string,
+    contentType: string,
+    checksumSha256?: string,
+  ): Promise<string>;
+  createDownloadUrl(bucket: string, key: string): Promise<string>;
 }
 
 interface ObjectStorageOptions {
@@ -13,7 +24,7 @@ interface ObjectStorageOptions {
   region: string;
   accessKey: string;
   secretKey: string;
-  bucket: string;
+  buckets: readonly string[];
   createBucketOnStart: boolean;
 }
 
@@ -30,9 +41,9 @@ export function createObjectStorageDependency(
     },
   });
 
-  async function bucketExists(): Promise<boolean> {
+  async function bucketExists(bucket: string): Promise<boolean> {
     try {
-      await client.send(new HeadBucketCommand({ Bucket: options.bucket }));
+      await client.send(new HeadBucketCommand({ Bucket: bucket }));
       return true;
     } catch {
       return false;
@@ -41,22 +52,38 @@ export function createObjectStorageDependency(
 
   return {
     async connect() {
-      if (await bucketExists()) {
-        return;
+      for (const bucket of options.buckets) {
+        if (await bucketExists(bucket)) continue;
+        if (!options.createBucketOnStart) {
+          throw new Error(`Object-storage bucket "${bucket}" does not exist.`);
+        }
+        await client.send(new CreateBucketCommand({ Bucket: bucket }));
       }
-      if (!options.createBucketOnStart) {
-        throw new Error(`Object-storage bucket "${options.bucket}" does not exist.`);
-      }
-      await client.send(new CreateBucketCommand({ Bucket: options.bucket }));
     },
     async check() {
-      return (await bucketExists()) ? "up" : "down";
+      const states = await Promise.all(options.buckets.map(bucketExists));
+      return states.every(Boolean) ? "up" : "down";
     },
-    createUploadUrl(key, contentType, checksumSha256) {
-      return getSignedUrl(client, new PutObjectCommand({ Bucket: options.bucket, Key: key, ContentType: contentType, ...(checksumSha256 ? { ChecksumSHA256: checksumSha256 } : {}) }), { expiresIn: 900 });
+    createUploadUrl(bucket, key, contentType, checksumSha256) {
+      if (!options.buckets.includes(bucket))
+        throw new Error("Object-storage bucket is not configured.");
+      return getSignedUrl(
+        client,
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          ContentType: contentType,
+          ...(checksumSha256 ? { ChecksumSHA256: checksumSha256 } : {}),
+        }),
+        { expiresIn: 900 },
+      );
     },
-    createDownloadUrl(key) {
-      return getSignedUrl(client, new GetObjectCommand({ Bucket: options.bucket, Key: key }), { expiresIn: 300 });
+    createDownloadUrl(bucket, key) {
+      if (!options.buckets.includes(bucket))
+        throw new Error("Object-storage bucket is not configured.");
+      return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: key }), {
+        expiresIn: 300,
+      });
     },
     close() {
       client.destroy();
@@ -64,5 +91,3 @@ export function createObjectStorageDependency(
     },
   };
 }
-
-

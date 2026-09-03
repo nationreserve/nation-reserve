@@ -60,7 +60,11 @@ const dependencies = {
     region: config.S3_REGION,
     accessKey: config.S3_ACCESS_KEY,
     secretKey: config.S3_SECRET_KEY,
-    bucket: config.S3_BUCKET,
+    buckets: [
+      config.S3_TRAINING_DATA_BUCKET,
+      config.S3_MANUFACTURER_DOCUMENTS_BUCKET,
+      config.S3_CONTRACT_DOCUMENTS_BUCKET,
+    ],
     createBucketOnStart: config.NODE_ENV === "development",
   }),
 };
@@ -92,7 +96,10 @@ const integrationService = new PostgresIntegrationRouteService(
   dependencies.postgres.pool,
   integrationConfig,
 );
-const contractService = new PostgresContractRouteService(dependencies.postgres.pool);
+const contractService = new PostgresContractRouteService(
+  dependencies.postgres.pool,
+  config.NODE_ENV,
+);
 const heartbeatService = new PostgresHeartbeatRouteService(
   dependencies.postgres.pool,
   heartbeatConfig,
@@ -127,9 +134,14 @@ const specificationService = new PostgresSpecificationService(
 );
 const activityService = new PostgresActivityService(dependencies.postgres.pool);
 const platformService = new PostgresPlatformService(dependencies.postgres.pool, {
-  bucket: config.S3_BUCKET,
-  createUploadUrl: (key, contentType, checksum) =>
-    dependencies.objectStorage.createUploadUrl(key, contentType, checksum),
+  buckets: {
+    training_data: config.S3_TRAINING_DATA_BUCKET,
+    manufacturer_document: config.S3_MANUFACTURER_DOCUMENTS_BUCKET,
+    contract_document: config.S3_CONTRACT_DOCUMENTS_BUCKET,
+    support_document: config.S3_CONTRACT_DOCUMENTS_BUCKET,
+  },
+  createUploadUrl: (bucket, key, contentType, checksum) =>
+    dependencies.objectStorage.createUploadUrl(bucket, key, contentType, checksum),
 });
 const resourceService = new PostgresResourceService(
   dependencies.postgres.pool,
@@ -165,6 +177,7 @@ const userFinancialService = new PostgresUserFinancialService(
   {
     executionEnabled: paymentConfig.PAYMENT_EXECUTION_ENABLED,
     returnUrl: paymentConfig.PAYMENT_METHOD_SETUP_RETURN_URL,
+    identityReturnUrl: paymentConfig.IDENTITY_VERIFICATION_RETURN_URL,
     connectReturnUrl: paymentConfig.PAYOUT_ONBOARDING_RETURN_URL,
     connectRefreshUrl: paymentConfig.PAYOUT_ONBOARDING_REFRESH_URL,
     country: paymentConfig.STRIPE_PLATFORM_COUNTRY,

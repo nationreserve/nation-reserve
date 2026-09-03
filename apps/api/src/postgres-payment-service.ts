@@ -1,47 +1,2088 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
-import{createHash}from"node:crypto";import type{Pool,PoolClient}from"pg";import type{PaymentConfig,PaymentProvider,VerifiedWebhookEvent}from"@nation-reserve/payments";
-const fail=(code:string,statusCode=400)=>Object.assign(new Error(code),{code,statusCode});
-export const PLATFORM_STRIPE_EVENTS=new Set(["payment_intent.succeeded","payment_intent.processing","payment_intent.payment_failed","payment_intent.canceled","charge.succeeded","charge.failed","charge.refunded","charge.refund.updated","charge.dispute.created","charge.dispute.updated","charge.dispute.closed","refund.created","refund.updated","refund.failed","transfer.created","transfer.updated","transfer.reversed"]);
-export const CONNECT_STRIPE_EVENTS=new Set(["account.updated","account.external_account.created","account.external_account.updated","account.external_account.deleted","payout.created","payout.updated","payout.paid","payout.failed"]);
-export const isSettledIncomingStripeEvent=(eventType:string)=>eventType==="payment_intent.succeeded"||eventType==="charge.succeeded";
-export const isProcessedWebhookDuplicate=(status:string)=>status==="processed"||status==="ignored";
-export class PostgresPaymentService{
- constructor(private readonly pool:Pool,private readonly provider:PaymentProvider,private readonly config:PaymentConfig){}
- private async member(userId:string,organizationId:string){if(!(await this.pool.query(`SELECT 1 FROM organization_memberships WHERE user_id=$1 AND organization_id=$2 AND status='active'`,[userId,organizationId])).rows[0])throw fail("FORBIDDEN",403);}
- private async admin(userId:string){if(!(await this.pool.query(`SELECT 1 FROM platform_role_assignments WHERE user_id=$1 AND status='active'`,[userId])).rows[0])throw fail("FORBIDDEN",403);}
- async organization(userId:string,organizationId:string,resource:string){await this.member(userId,organizationId);const queries:Record<string,string>={
-  "payment-methods":`SELECT m.id,m.payment_method_type,m.display_brand,m.display_last4,m.expiration_month,m.expiration_year,m.status,m.is_default,m.verification_status,m.created_at FROM company_payment_methods m JOIN hiring_companies h ON h.id=m.hiring_company_id WHERE h.organization_id=$1 AND m.removed_at IS NULL ORDER BY m.is_default DESC,m.created_at DESC`,
-  "payout-account":`SELECT provider,status,details_submitted,transfers_enabled,payouts_enabled,requirements_currently_due,disabled_reason,country_code,last_synced_at FROM payment_provider_connected_accounts WHERE robot_owner_organization_id=$1`,
-  "payment-attempts":`SELECT p.* FROM payment_attempts p JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE h.organization_id=$1 ORDER BY p.created_at DESC LIMIT 100`,
-  "payout-attempts":`SELECT * FROM payout_attempts WHERE robot_owner_organization_id=$1 ORDER BY created_at DESC LIMIT 100`};const q=queries[resource];if(!q)throw fail("PAYMENT_RESOURCE_UNKNOWN",404);return{items:(await this.pool.query(q,[organizationId])).rows};}
- private async customer(organizationId:string){let row=(await this.pool.query(`SELECT p.*,h.id hiring_company_id,b.id billing_account_id,o.legal_name FROM payment_provider_customers p JOIN hiring_companies h ON h.organization_id=p.organization_id JOIN company_billing_accounts b ON b.hiring_company_id=h.id JOIN organizations o ON o.id=p.organization_id WHERE p.organization_id=$1 AND p.provider=$2 AND p.provider_environment=$3`,[organizationId,this.provider.name,this.provider.environment])).rows[0];if(row)return row;const base=(await this.pool.query(`SELECT h.id hiring_company_id,b.id billing_account_id,o.legal_name FROM organizations o JOIN hiring_companies h ON h.organization_id=o.id JOIN company_billing_accounts b ON b.hiring_company_id=h.id WHERE o.id=$1`,[organizationId])).rows[0];if(!base)throw fail("BILLING_ACCOUNT_NOT_FOUND",404);const remote=await this.provider.createCompanyCustomer({organizationId,name:base.legal_name,idempotencyKey:`customer-${organizationId}`});row=(await this.pool.query(`INSERT INTO payment_provider_customers(provider,provider_environment,organization_id,organization_type,provider_customer_id,status,name_snapshot)VALUES($1,$2,$3,'hiring_company',$4,'active',$5) ON CONFLICT(provider,provider_environment,organization_id) DO UPDATE SET updated_at=now() RETURNING *`,[this.provider.name,this.provider.environment,organizationId,remote.id,base.legal_name])).rows[0];return{...base,...row};}
- async setDefaultPaymentMethod(userId:string,organizationId:string,id:string){await this.member(userId,organizationId);const client=await this.pool.connect();try{await client.query("BEGIN");const target=(await client.query(`SELECT m.id,m.billing_account_id FROM company_payment_methods m JOIN hiring_companies h ON h.id=m.hiring_company_id WHERE m.id=$1 AND h.organization_id=$2 AND m.status='active' FOR UPDATE`,[id,organizationId])).rows[0];if(!target)throw fail("PAYMENT_METHOD_NOT_FOUND",404);await client.query(`UPDATE company_payment_methods SET is_default=(id=$1),updated_at=now() WHERE billing_account_id=$2 AND status='active'`,[id,target.billing_account_id]);await client.query(`UPDATE payment_provider_customers SET default_payment_method_id=$1,updated_at=now() WHERE organization_id=$2 AND provider=$3 AND provider_environment=$4`,[id,organizationId,this.provider.name,this.provider.environment]);await client.query("COMMIT");return{id,isDefault:true};}catch(e){await client.query("ROLLBACK");throw e;}finally{client.release();}}
- async refreshPayoutAccount(userId:string,organizationId:string){await this.member(userId,organizationId);const account=(await this.pool.query(`SELECT * FROM payment_provider_connected_accounts WHERE robot_owner_organization_id=$1 AND provider=$2 AND provider_environment=$3`,[organizationId,this.provider.name,this.provider.environment])).rows[0];if(!account)throw fail("PAYOUT_ACCOUNT_NOT_FOUND",404);const remote=await this.provider.retrieveConnectedAccount({accountId:account.provider_account_id}),status=remote.payoutsEnabled&&remote.transfersEnabled?"active":remote.detailsSubmitted?"pending_verification":"onboarding";return(await this.pool.query(`UPDATE payment_provider_connected_accounts SET status=$2,details_submitted=$3,transfers_enabled=$4,payouts_enabled=$5,requirements_currently_due=$6::jsonb,last_synced_at=now(),updated_at=now() WHERE id=$1 RETURNING provider,status,details_submitted,transfers_enabled,payouts_enabled,requirements_currently_due,last_synced_at`,[account.id,status,remote.detailsSubmitted,remote.transfersEnabled,remote.payoutsEnabled,JSON.stringify(remote.requirements)])).rows[0];} async setupPaymentMethod(userId:string,organizationId:string){await this.member(userId,organizationId);const c=await this.customer(organizationId);return this.provider.createPaymentMethodSetup({customerId:c.provider_customer_id,returnUrl:this.config.PAYMENT_METHOD_SETUP_RETURN_URL,idempotencyKey:`setup-${organizationId}-${crypto.randomUUID()}`});}
- async confirmPaymentMethod(userId:string,organizationId:string,paymentMethodId:string,makeDefault=true){await this.member(userId,organizationId);const c=await this.customer(organizationId),method=await this.provider.retrievePaymentMethod({customerId:c.provider_customer_id,paymentMethodId});const client=await this.pool.connect();try{await client.query("BEGIN");if(makeDefault)await client.query(`UPDATE company_payment_methods SET is_default=false,updated_at=now() WHERE billing_account_id=$1`,[c.billing_account_id]);const row=(await client.query(`INSERT INTO company_payment_methods(hiring_company_id,billing_account_id,provider,provider_environment,provider_customer_id,provider_payment_method_id,payment_method_type,display_brand,display_last4,expiration_month,expiration_year,status,is_default,verification_status)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',$12,'verified') ON CONFLICT(provider,provider_environment,provider_payment_method_id) DO UPDATE SET status='active',is_default=EXCLUDED.is_default,updated_at=now() RETURNING id,payment_method_type,display_brand,display_last4,status,is_default`,[c.hiring_company_id,c.billing_account_id,this.provider.name,this.provider.environment,c.provider_customer_id,method.id,method.type,method.brand??null,method.last4??null,method.expirationMonth??null,method.expirationYear??null,makeDefault])).rows[0];await client.query(`UPDATE payment_provider_customers SET default_payment_method_id=CASE WHEN $2 THEN $1 ELSE default_payment_method_id END,updated_at=now() WHERE id=$3`,[row.id,makeDefault,c.id]);await client.query("COMMIT");return row;}catch(e){await client.query("ROLLBACK");throw e;}finally{client.release();}}
- async removePaymentMethod(userId:string,organizationId:string,id:string){await this.member(userId,organizationId);const row=(await this.pool.query(`UPDATE company_payment_methods m SET status='removed',is_default=false,removed_at=now(),updated_at=now() FROM hiring_companies h WHERE m.id=$1 AND m.hiring_company_id=h.id AND h.organization_id=$2 AND NOT EXISTS(SELECT 1 FROM payment_attempts p WHERE p.payment_method_id=m.id AND p.status IN('created','submitted','requires_action','processing','authorized','succeeded')) RETURNING m.id,m.status`,[id,organizationId])).rows[0];if(!row)throw fail("PAYMENT_METHOD_NOT_FOUND_OR_IN_USE",409);return row;}
- async payoutOnboarding(userId:string,organizationId:string){await this.member(userId,organizationId);let account=(await this.pool.query(`SELECT * FROM payment_provider_connected_accounts WHERE robot_owner_organization_id=$1 AND provider=$2 AND provider_environment=$3`,[organizationId,this.provider.name,this.provider.environment])).rows[0];if(!account){const remote=await this.provider.createOwnerConnectedAccount({organizationId,country:this.config.STRIPE_PLATFORM_COUNTRY,idempotencyKey:`connected-${organizationId}`});account=(await this.pool.query(`INSERT INTO payment_provider_connected_accounts(robot_owner_organization_id,provider,provider_environment,provider_account_id,account_type,status,country_code,default_currency)VALUES($1,$2,$3,$4,'express','onboarding',$5,'USD') RETURNING *`,[organizationId,this.provider.name,this.provider.environment,remote.id,this.config.STRIPE_PLATFORM_COUNTRY])).rows[0];}return this.provider.createOwnerOnboardingLink({accountId:account.provider_account_id,returnUrl:this.config.PAYOUT_ONBOARDING_RETURN_URL,refreshUrl:this.config.PAYOUT_ONBOARDING_REFRESH_URL});}
- async collect(userId:string,invoiceId:string,organizationId?:string){if(organizationId){await this.member(userId,organizationId);const owned=(await this.pool.query(`SELECT 1 FROM company_invoices i JOIN hiring_companies h ON h.id=i.hiring_company_id WHERE i.id=$1 AND h.organization_id=$2`,[invoiceId,organizationId])).rows[0];if(!owned)throw fail("INVOICE_NOT_FOUND",404);}else await this.admin(userId);if(!this.config.PAYMENT_EXECUTION_ENABLED)throw fail("PAYMENT_EXECUTION_DISABLED",409);const key=`invoice-${invoiceId}`,attemptId=crypto.randomUUID();const row=(await this.pool.query(`INSERT INTO payment_attempts(id,attempt_number,provider,provider_environment,attempt_type,status,hiring_company_id,billing_account_id,invoice_id,payment_method_id,currency,amount_minor_units,idempotency_key,provider_customer_id,initiated_at) SELECT $1,$2,$3,$4,'invoice_collection','created',i.hiring_company_id,i.billing_account_id,i.id,m.id,'USD',i.amount_due_minor_units,$5,p.provider_customer_id,now() FROM company_invoices i JOIN company_billing_accounts b ON b.id=i.billing_account_id AND b.billing_status IN('active','past_due') JOIN payment_provider_customers p ON p.organization_id=(SELECT organization_id FROM hiring_companies WHERE id=i.hiring_company_id) JOIN company_payment_methods m ON m.billing_account_id=i.billing_account_id AND m.is_default AND m.status='active' WHERE i.id=$6 AND i.status IN('issued','partially_paid','past_due') AND i.amount_due_minor_units>0 AND NOT EXISTS(SELECT 1 FROM financial_holds fh WHERE fh.invoice_id=i.id AND fh.status='active') AND NOT EXISTS(SELECT 1 FROM financial_disputes fd WHERE fd.invoice_id=i.id AND fd.status NOT IN('resolved','closed','rejected')) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,[attemptId,`PAY-${Date.now()}-${attemptId.slice(0,8)}`,this.provider.name,this.provider.environment,key,invoiceId])).rows[0];if(!row)throw fail("INVOICE_NOT_COLLECTIBLE",409);try{const remote=await this.provider.createInvoiceCollection({customerId:row.provider_customer_id,paymentMethodId:(await this.pool.query(`SELECT provider_payment_method_id FROM company_payment_methods WHERE id=$1`,[row.payment_method_id])).rows[0].provider_payment_method_id,amountMinorUnits:Number(row.amount_minor_units),currency:"USD",idempotencyKey:key});return(await this.pool.query(`UPDATE payment_attempts SET status=$2,provider_payment_intent_id=$3,requires_action=$4,updated_at=now() WHERE id=$1 RETURNING *`,[row.id,remote.status,remote.providerObjectId,remote.status==="requires_action"])).rows[0];}catch(e:any){await this.pool.query(`UPDATE payment_attempts SET status=$2,failure_code=$3,failure_message_safe='Provider request failed',failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,[row.id,e.outcome==="unknown"?"unknown":"failed",e.code??"PAYMENT_PROVIDER_ERROR"]);throw e;}}
- async payout(userId:string,statementId:string){await this.admin(userId);if(!this.config.PAYMENT_EXECUTION_ENABLED)throw fail("PAYMENT_EXECUTION_DISABLED",409);const key=`statement-${statementId}`,id=crypto.randomUUID();const row=(await this.pool.query(`INSERT INTO payout_attempts(id,attempt_number,provider,provider_environment,status,robot_owner_organization_id,connected_account_id,statement_id,currency,amount_minor_units,idempotency_key,initiated_at) SELECT $1,$2,$3,$4,'created',s.robot_owner_organization_id,a.id,s.id,'USD',s.net_earning_minor_units-s.held_minor_units,$5,now() FROM robot_owner_earnings_statements s JOIN payment_provider_connected_accounts a ON a.robot_owner_organization_id=s.robot_owner_organization_id AND a.status='active' WHERE s.id=$6 AND s.status='issued' AND s.net_earning_minor_units-s.held_minor_units >= $7 AND NOT EXISTS(SELECT 1 FROM financial_holds fh WHERE (fh.statement_id=s.id OR fh.organization_id=s.robot_owner_organization_id) AND fh.status='active') ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,[id,`OUT-${Date.now()}-${id.slice(0,8)}`,this.provider.name,this.provider.environment,key,statementId,this.config.OWNER_MINIMUM_PAYOUT_MINOR_UNITS])).rows[0];if(!row)throw fail("STATEMENT_NOT_PAYABLE",409);const account=(await this.pool.query(`SELECT provider_account_id FROM payment_provider_connected_accounts WHERE id=$1`,[row.connected_account_id])).rows[0];try{const remote=await this.provider.createOwnerPayout({accountId:account.provider_account_id,amountMinorUnits:Number(row.amount_minor_units),currency:"USD",idempotencyKey:key});return(await this.pool.query(`UPDATE payout_attempts SET status=$2,provider_transfer_id=$3,updated_at=now() WHERE id=$1 RETURNING *`,[row.id,remote.status,remote.providerObjectId])).rows[0];}catch(e:any){await this.pool.query(`UPDATE payout_attempts SET status=$2,failure_code=$3,failure_message_safe='Provider request failed',failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,[row.id,e.outcome==="unknown"?"unknown":"failed",e.code??"PAYMENT_PROVIDER_ERROR"]);throw e;}}
- private async emit(c:PoolClient,type:string,aggregateType:string,id:string,payload:Record<string,unknown>={}){await c.query(`INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,occurred_at,payload)VALUES(gen_random_uuid(),$1,$2,$3,now(),$4)`,[type,aggregateType,id,payload]);}
- private async notify(c:PoolClient,type:string,resourceType:string,id:string,organizationId:string|null,severity:"info"|"warning"|"critical",payload:Record<string,unknown>={}){await c.query(`INSERT INTO payment_notifications(audience_type,organization_id,notification_type,resource_type,resource_id,severity,mandatory,safe_payload)VALUES(CASE WHEN $4::uuid IS NULL THEN 'platform' ELSE 'organization' END,$4,$1,$2,$3,$5,true,$6) ON CONFLICT(notification_type,resource_type,resource_id) DO NOTHING`,[type,resourceType,id,organizationId,severity,payload]);}
- async refund(userId:string,paymentAttemptId:string,input:{amountMinorUnits:number;financialAdjustmentId:string}){await this.admin(userId);if(!this.config.PAYMENT_EXECUTION_ENABLED)throw fail("PAYMENT_EXECUTION_DISABLED",409);const client=await this.pool.connect();let row:any;try{await client.query("BEGIN");const payment=(await client.query(`SELECT p.*,h.organization_id FROM payment_attempts p JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE p.id=$1 AND p.status IN('settled','partially_refunded','disputed') FOR UPDATE`,[paymentAttemptId])).rows[0];if(!payment)throw fail("PAYMENT_NOT_REFUNDABLE",409);const adjustment=(await client.query(`SELECT * FROM financial_adjustments WHERE id=$1 AND invoice_id=$2 AND status IN('approved','posted') AND amount_minor_units>=$3 FOR UPDATE`,[input.financialAdjustmentId,payment.invoice_id,input.amountMinorUnits])).rows[0];if(!adjustment)throw fail("REFUND_ADJUSTMENT_REQUIRED",409);const id=crypto.randomUUID(),key=`refund-${paymentAttemptId}-${input.financialAdjustmentId}-${input.amountMinorUnits}`;row=(await client.query(`INSERT INTO payment_refunds(id,refund_number,provider,provider_environment,payment_attempt_id,invoice_id,financial_adjustment_id,amount_minor_units,currency,status,idempotency_key,initiated_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,'USD','created',$9,now()) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,[id,`REF-${Date.now()}-${id.slice(0,8)}`,this.provider.name,this.provider.environment,payment.id,payment.invoice_id,adjustment.id,input.amountMinorUnits,key])).rows[0];await this.emit(client,"refund.created","payment_refund",row.id,{paymentAttemptId});await client.query("COMMIT");row.provider_payment_intent_id=payment.provider_payment_intent_id;row.organization_id=payment.organization_id;}catch(e){await client.query("ROLLBACK");throw e;}finally{client.release();}try{const remote=await this.provider.createRefund({providerPaymentId:row.provider_payment_intent_id,amountMinorUnits:Number(row.amount_minor_units),idempotencyKey:row.idempotency_key});return(await this.pool.query(`UPDATE payment_refunds SET status=$2,provider_refund_id=$3,updated_at=now() WHERE id=$1 RETURNING *`,[row.id,remote.status,remote.providerObjectId])).rows[0];}catch(e:any){await this.pool.query(`UPDATE payment_refunds SET status=$2,failure_code=$3,failure_message_safe='Refund provider request failed',failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,[row.id,e.outcome==="unknown"?"unknown":"failed",e.code??"PAYMENT_PROVIDER_ERROR"]);throw e;}}
- async submitSettlementBatch(userId:string,id:string){await this.admin(userId);if(!this.config.PAYMENT_EXECUTION_ENABLED)throw fail("PAYMENT_EXECUTION_DISABLED",409);const client=await this.pool.connect();let items:any[];try{await client.query("BEGIN");const batch=(await client.query(`SELECT * FROM settlement_batches WHERE id=$1 AND status IN('approved','ready_for_submission') FOR UPDATE`,[id])).rows[0];if(!batch)throw fail("SETTLEMENT_BATCH_NOT_SUBMITTABLE",409);items=(await client.query(`SELECT * FROM settlement_batch_items WHERE settlement_batch_id=$1 AND status='ready' ORDER BY created_at FOR UPDATE`,[id])).rows;await client.query(`UPDATE settlement_batches SET status='submitted',submitted_at=now(),external_processor=$2,updated_at=now() WHERE id=$1`,[id,this.provider.name]);await this.emit(client,"settlement.batch.submitted","settlement_batch",id,{itemCount:items.length});await client.query("COMMIT");}catch(e){await client.query("ROLLBACK");throw e;}finally{client.release();}let submitted=0,failed=0;for(const item of items){try{if(item.item_type==="invoice_collection"){const attempt=await this.collect(userId,item.invoice_id);await this.pool.query(`UPDATE payment_attempts SET settlement_batch_id=$2,settlement_batch_item_id=$3 WHERE id=$1`,[attempt.id,id,item.id]);await this.pool.query(`UPDATE settlement_batch_items SET status='submitted',external_reference=$2,updated_at=now() WHERE id=$1`,[item.id,attempt.id]);}else{const attempt=await this.payout(userId,item.statement_id);await this.pool.query(`UPDATE payout_attempts SET settlement_batch_id=$2,settlement_batch_item_id=$3 WHERE id=$1`,[attempt.id,id,item.id]);await this.pool.query(`UPDATE settlement_batch_items SET status='submitted',external_reference=$2,updated_at=now() WHERE id=$1`,[item.id,attempt.id]);}submitted++;}catch{failed++;await this.pool.query(`UPDATE settlement_batch_items SET status='failed',hold_reason='Submission failed; review attempt history',updated_at=now() WHERE id=$1`,[item.id]);}}const status=submitted===0&&failed>0?"failed":failed>0?"partially_completed":"processing";return(await this.pool.query(`UPDATE settlement_batches SET status=$2,failed_at=CASE WHEN $2='failed' THEN now() ELSE failed_at END,failure_reason=CASE WHEN $3>0 THEN 'One or more items failed submission' ELSE NULL END,updated_at=now() WHERE id=$1 RETURNING *`,[id,status,failed])).rows[0];}
- private async completeBatchItem(c:PoolClient,itemId:string|undefined){if(!itemId)return;const item=(await c.query(`UPDATE settlement_batch_items SET status='succeeded',updated_at=now() WHERE id=$1 AND status<>'succeeded' RETURNING settlement_batch_id`,[itemId])).rows[0];if(!item)return;const counts=(await c.query(`SELECT COUNT(*) FILTER(WHERE status IN('ready','submitted','processing','pending'))::integer pending,COUNT(*) FILTER(WHERE status='failed')::integer failed FROM settlement_batch_items WHERE settlement_batch_id=$1`,[item.settlement_batch_id])).rows[0];if(Number(counts.pending)===0){const status=Number(counts.failed)>0?"partially_completed":"completed";await c.query(`UPDATE settlement_batches SET status=$2,completed_at=now(),updated_at=now() WHERE id=$1`,[item.settlement_batch_id,status]);await this.emit(c,status==="completed"?"settlement.batch.completed":"settlement.batch.partially_completed","settlement_batch",item.settlement_batch_id);}} async collectAutomaticInvoices(userId:string){await this.admin(userId);await this.pool.query(`UPDATE company_invoices SET status='past_due',updated_at=now() WHERE status IN('issued','partially_paid') AND amount_due_minor_units>0 AND due_date<CURRENT_DATE`);await this.pool.query(`UPDATE company_billing_accounts b SET billing_status='past_due',past_due_minor_units=x.total,last_failed_payment_at=COALESCE(last_failed_payment_at,now()),updated_at=now() FROM(SELECT billing_account_id,SUM(amount_due_minor_units)::bigint total FROM company_invoices WHERE status='past_due' GROUP BY billing_account_id)x WHERE b.id=x.billing_account_id`);const rows=await this.pool.query(`SELECT i.id FROM company_invoices i JOIN company_billing_accounts b ON b.id=i.billing_account_id WHERE b.collection_method='automatic' AND b.automatic_collection_enabled AND b.billing_status IN('active','past_due') AND i.status IN('issued','past_due','partially_paid') AND i.amount_due_minor_units>0 AND (i.issue_date+b.automatic_collection_day_offset)::date<=CURRENT_DATE AND NOT EXISTS(SELECT 1 FROM payment_attempts p WHERE p.invoice_id=i.id AND p.status IN('created','submitted','requires_action','processing','authorized','succeeded')) ORDER BY i.due_date NULLS LAST LIMIT 100`),results=[];for(const row of rows.rows){try{results.push(await this.collect(userId,row.id));}catch(e){results.push({invoiceId:row.id,error:e instanceof Error?e.message:"COLLECTION_FAILED"});}}return{processed:rows.rowCount??0,results};}
- async retryDue(userId:string){await this.admin(userId);if(!this.config.PAYMENT_EXECUTION_ENABLED)throw fail("PAYMENT_EXECUTION_DISABLED",409);const results:any[]=[];const payments=await this.pool.query(`SELECT p.*,m.provider_payment_method_id FROM payment_attempts p JOIN company_payment_methods m ON m.id=p.payment_method_id WHERE p.status='failed' AND COALESCE(p.next_retry_at,p.failed_at)<=now() AND p.attempt_count<$1 AND NOT EXISTS(SELECT 1 FROM payment_attempts n WHERE n.retry_of_attempt_id=p.id) ORDER BY p.next_retry_at LIMIT 100`,[this.config.COMPANY_PAYMENT_RETRY_LIMIT+1]);for(const old of payments.rows){const id=crypto.randomUUID(),key=`${old.idempotency_key}-retry-${Number(old.attempt_count)+1}`,next=(await this.pool.query(`INSERT INTO payment_attempts(id,attempt_number,provider,provider_environment,attempt_type,status,hiring_company_id,billing_account_id,invoice_id,payment_method_id,currency,amount_minor_units,idempotency_key,provider_customer_id,attempt_count,initiated_at,retry_of_attempt_id)VALUES($1,$2,$3,$4,$5,'created',$6,$7,$8,$9,'USD',$10,$11,$12,$13,now(),$14) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,[id,`PAY-${Date.now()}-${id.slice(0,8)}`,old.provider,old.provider_environment,old.attempt_type,old.hiring_company_id,old.billing_account_id,old.invoice_id,old.payment_method_id,old.amount_minor_units,key,old.provider_customer_id,Number(old.attempt_count)+1,old.id])).rows[0];try{const remote=await this.provider.createInvoiceCollection({customerId:old.provider_customer_id,paymentMethodId:old.provider_payment_method_id,amountMinorUnits:Number(old.amount_minor_units),currency:"USD",idempotencyKey:key});await this.pool.query(`UPDATE payment_attempts SET status=$2,provider_payment_intent_id=$3,requires_action=$4,updated_at=now() WHERE id=$1`,[next.id,remote.status,remote.providerObjectId,remote.status==="requires_action"]);results.push({id:next.id,status:remote.status});}catch(e:any){await this.pool.query(`UPDATE payment_attempts SET status=$2,failure_code=$3,failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,[next.id,e.outcome==="unknown"?"unknown":"failed",e.code??"PAYMENT_PROVIDER_ERROR"]);results.push({id:next.id,status:e.outcome==="unknown"?"unknown":"failed"});}}const payouts=await this.pool.query(`SELECT p.*,a.provider_account_id FROM payout_attempts p JOIN payment_provider_connected_accounts a ON a.id=p.connected_account_id WHERE p.status='failed' AND COALESCE(p.next_retry_at,p.failed_at)<=now() AND p.attempt_count<$1 AND a.status='active' AND NOT EXISTS(SELECT 1 FROM payout_attempts n WHERE n.retry_of_attempt_id=p.id) ORDER BY COALESCE(p.next_retry_at,p.failed_at) LIMIT 100`,[this.config.OWNER_PAYOUT_RETRY_LIMIT+1]);for(const old of payouts.rows){const id=crypto.randomUUID(),key=`${old.idempotency_key}-retry-${Number(old.attempt_count)+1}`,next=(await this.pool.query(`INSERT INTO payout_attempts(id,attempt_number,provider,provider_environment,status,robot_owner_organization_id,connected_account_id,statement_id,currency,amount_minor_units,idempotency_key,attempt_count,initiated_at,retry_of_attempt_id)VALUES($1,$2,$3,$4,'created',$5,$6,$7,'USD',$8,$9,$10,now(),$11) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,[id,`OUT-${Date.now()}-${id.slice(0,8)}`,old.provider,old.provider_environment,old.robot_owner_organization_id,old.connected_account_id,old.statement_id,old.amount_minor_units,key,Number(old.attempt_count)+1,old.id])).rows[0];try{const remote=await this.provider.createOwnerPayout({accountId:old.provider_account_id,amountMinorUnits:Number(old.amount_minor_units),currency:"USD",idempotencyKey:key});await this.pool.query(`UPDATE payout_attempts SET status=$2,provider_transfer_id=$3,updated_at=now() WHERE id=$1`,[next.id,remote.status,remote.providerObjectId]);results.push({id:next.id,status:remote.status});}catch(e:any){await this.pool.query(`UPDATE payout_attempts SET status=$2,failure_code=$3,failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,[next.id,e.outcome==="unknown"?"unknown":"failed",e.code??"PAYMENT_PROVIDER_ERROR"]);results.push({id:next.id,status:e.outcome==="unknown"?"unknown":"failed"});}}return{processed:results.length,results};} async reconcilePayments(userId:string){await this.admin(userId);const run=(await this.pool.query(`INSERT INTO payment_reconciliation_runs(provider,provider_environment,status,started_at)VALUES($1,$2,'running',now()) RETURNING *`,[this.provider.name,this.provider.environment])).rows[0],exceptions:any[]=[];let records=0;const payments=await this.pool.query(`SELECT id,provider_payment_intent_id,status FROM payment_attempts WHERE provider=$1 AND provider_environment=$2 AND provider_payment_intent_id IS NOT NULL AND status IN('submitted','processing','unknown','succeeded') ORDER BY created_at LIMIT 500`,[this.provider.name,this.provider.environment]);for(const row of payments.rows){records++;try{const remote=await this.provider.retrievePayment({providerPaymentId:row.provider_payment_intent_id});if(remote.status==="succeeded"){const c=await this.pool.connect();try{await c.query("BEGIN");await this.applyEvent(c,{id:`reconcile-${run.id}-${row.id}`,type:"payment_intent.succeeded",createdAt:new Date(),environment:this.provider.environment,objectId:row.provider_payment_intent_id,status:"succeeded",metadata:{reconciliationRunId:run.id}});await this.emit(c,"payment.reconciliation.repaired","payment_attempt",row.id,{runId:run.id});await c.query("COMMIT");}catch(e){await c.query("ROLLBACK");throw e;}finally{c.release();}}else if(remote.status==="failed")await this.pool.query(`UPDATE payment_attempts SET status='failed',failure_code='RECONCILED_PROVIDER_FAILURE',failed_at=now(),provider_status_at=now(),updated_at=now() WHERE id=$1 AND status<>'settled'`,[row.id]);}catch(e){exceptions.push({type:"payment_retrieval_failed",resourceType:"payment_attempt",resourceId:row.id,observed:e instanceof Error?e.message:"unknown"});}}
- const refunds=await this.pool.query(`SELECT id,provider_refund_id,status FROM payment_refunds WHERE provider=$1 AND provider_environment=$2 AND provider_refund_id IS NOT NULL AND status IN('submitted','processing','unknown') ORDER BY created_at LIMIT 500`,[this.provider.name,this.provider.environment]);for(const row of refunds.rows){records++;try{const remote=await this.provider.retrieveRefund({providerRefundId:row.provider_refund_id});if(remote.status==="succeeded"){const c=await this.pool.connect();try{await c.query("BEGIN");await this.applyEvent(c,{id:`reconcile-${run.id}-${row.id}`,type:"refund.updated",createdAt:new Date(),environment:this.provider.environment,objectId:row.provider_refund_id,status:"succeeded",metadata:{reconciliationRunId:run.id}});await c.query("COMMIT");}catch(e){await c.query("ROLLBACK");throw e;}finally{c.release();}}}catch(e){exceptions.push({type:"refund_retrieval_failed",resourceType:"payment_refund",resourceId:row.id,observed:e instanceof Error?e.message:"unknown"});}}
- const payouts=await this.pool.query(`SELECT id,provider_payout_id,provider_transfer_id,status FROM payout_attempts WHERE provider=$1 AND provider_environment=$2 AND COALESCE(provider_payout_id,provider_transfer_id) IS NOT NULL AND status IN('submitted','processing','unknown','succeeded') ORDER BY created_at LIMIT 500`,[this.provider.name,this.provider.environment]);for(const row of payouts.rows){records++;try{const objectId=row.provider_payout_id??row.provider_transfer_id,remote=await this.provider.retrievePayout({providerPayoutId:objectId});if(remote.status==="paid"){const c=await this.pool.connect();try{await c.query("BEGIN");await this.applyEvent(c,{id:`reconcile-${run.id}-${row.id}`,type:"payout.paid",createdAt:new Date(),environment:this.provider.environment,objectId,status:"paid",metadata:{reconciliationRunId:run.id}});await this.emit(c,"payment.reconciliation.repaired","payout_attempt",row.id,{runId:run.id});await c.query("COMMIT");}catch(e){await c.query("ROLLBACK");throw e;}finally{c.release();}}else if(remote.status==="failed")await this.pool.query(`UPDATE payout_attempts SET status='failed',failure_code='RECONCILED_PROVIDER_FAILURE',failed_at=now(),provider_status_at=now(),updated_at=now() WHERE id=$1 AND status<>'paid'`,[row.id]);}catch(e){exceptions.push({type:"payout_retrieval_failed",resourceType:"payout_attempt",resourceId:row.id,observed:e instanceof Error?e.message:"unknown"});}}
- const accounts=await this.pool.query(`SELECT id,provider_account_id FROM payment_provider_connected_accounts WHERE provider=$1 AND provider_environment=$2 AND (last_synced_at IS NULL OR last_synced_at<now()-interval '15 minutes') LIMIT 500`,[this.provider.name,this.provider.environment]);for(const row of accounts.rows){records++;try{const remote=await this.provider.retrieveConnectedAccount({accountId:row.provider_account_id}),status=remote.payoutsEnabled&&remote.transfersEnabled?"active":remote.detailsSubmitted?"pending_verification":"onboarding";await this.pool.query(`UPDATE payment_provider_connected_accounts SET status=$2,details_submitted=$3,transfers_enabled=$4,payouts_enabled=$5,requirements_currently_due=$6::jsonb,last_synced_at=now(),updated_at=now() WHERE id=$1`,[row.id,status,remote.detailsSubmitted,remote.transfersEnabled,remote.payoutsEnabled,JSON.stringify(remote.requirements)]);}catch(e){exceptions.push({type:"connected_account_refresh_failed",resourceType:"payout_account",resourceId:row.id,observed:e instanceof Error?e.message:"unknown"});}} for(const x of exceptions)await this.pool.query(`INSERT INTO payment_reconciliation_exceptions(reconciliation_run_id,exception_type,severity,resource_type,resource_id,observed_state)VALUES($1,$2,'critical',$3,$4,$5)`,[run.id,x.type,x.resourceType,x.resourceId,x.observed]);return(await this.pool.query(`UPDATE payment_reconciliation_runs SET status=$2,completed_at=now(),record_count=$3,exception_count=$4,summary=$5,updated_at=now() WHERE id=$1 RETURNING *`,[run.id,exceptions.length?"completed_with_exceptions":"completed",records,exceptions.length,{repaired:records-exceptions.length}])).rows[0];} async processWebhook(rawBody:Buffer,signature:string){const event=await this.provider.verifyWebhook({rawBody,signature});const allowed=event.webhookSource==="connect"?CONNECT_STRIPE_EVENTS:PLATFORM_STRIPE_EVENTS;if(!allowed.has(event.type))throw fail("PAYMENT_WEBHOOK_EVENT_SOURCE_NOT_ALLOWED",400);if(event.environment!==this.provider.environment)throw fail("PAYMENT_WEBHOOK_ENVIRONMENT_MISMATCH",400);const stored=(await this.pool.query(`INSERT INTO payment_processor_events(provider,provider_environment,provider_event_id,event_type,provider_object_id,created_by_provider_at,received_at,processing_status,payload_hash,signature_verified)VALUES($1,$2,$3,$4,$5,$6,now(),'received',$7,true) ON CONFLICT(provider,provider_environment,provider_event_id) DO UPDATE SET received_at=EXCLUDED.received_at RETURNING id,processing_status`,[this.provider.name,this.provider.environment,event.id,event.type,event.objectId,event.createdAt,createHash("sha256").update(rawBody).digest("hex")])).rows[0];if(isProcessedWebhookDuplicate(stored.processing_status))return{accepted:true,duplicate:true};const client=await this.pool.connect();try{await client.query("BEGIN");const locked=(await client.query(`SELECT processing_status FROM payment_processor_events WHERE id=$1 FOR UPDATE`,[stored.id])).rows[0];if(isProcessedWebhookDuplicate(locked.processing_status)){await client.query("COMMIT");return{accepted:true,duplicate:true};}await client.query(`UPDATE payment_processor_events SET processing_status='processing',attempt_count=attempt_count+1,updated_at=now() WHERE id=$1`,[stored.id]);await this.applyEvent(client,event);await this.emit(client,"payment.webhook.received","payment_processor_event",stored.id,{eventType:event.type});await client.query(`UPDATE payment_processor_events SET processing_status='processed',processed_at=now(),failure_code=NULL,failure_message_safe=NULL,updated_at=now() WHERE id=$1`,[stored.id]);await client.query("COMMIT");return{accepted:true,duplicate:false};}catch(e){await client.query("ROLLBACK");await this.pool.query(`UPDATE payment_processor_events SET processing_status='failed',failure_code=$2,failure_message_safe='Webhook processing failed; delivery may be retried',updated_at=now() WHERE id=$1`,[stored.id,e instanceof Error?e.message.slice(0,120):"PAYMENT_WEBHOOK_PROCESSING_FAILED"]);throw e;}finally{client.release();}} private async applyEvent(c:PoolClient,e:VerifiedWebhookEvent){const fundingRefund=(await c.query(`SELECT r.*,p.stripe_customer_id,p.stripe_payment_intent_id FROM robot_funding_refunds r JOIN robot_funding_payments p ON p.id=r.funding_payment_id WHERE r.stripe_refund_id=$1 FOR UPDATE OF r`,[e.objectId])).rows[0];if(fundingRefund&&['refund.updated','charge.refund.updated'].includes(e.type)&&e.status!=='failed'){await c.query(`UPDATE robot_funding_refunds SET status='SUCCEEDED',settled_at=now(),updated_at=now() WHERE id=$1`,[fundingRefund.id]);await c.query(`UPDATE robot_funding_payments SET refunded_cents=refunded_cents+$2,status=CASE WHEN refunded_cents+$2>=amount_cents THEN 'REFUNDED' ELSE 'PARTIALLY_REFUNDED' END,updated_at=now() WHERE id=$1`,[fundingRefund.funding_payment_id,fundingRefund.amount_cents]);await c.query(`UPDATE downpayment_accounts SET reserved_cents=reserved_cents-$2,refunded_cents=refunded_cents+$2,updated_at=now() WHERE participant_id=$1`,[fundingRefund.user_id,fundingRefund.amount_cents]);await c.query(`INSERT INTO unified_financial_ledger(user_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,stripe_refund_id,idempotency_key,metadata,settled_at) VALUES($1,'REFUND_SETTLED',$2,'CREDIT','SETTLED',$3,$4,$5,$6,$7,now()) ON CONFLICT(idempotency_key) DO NOTHING`,[fundingRefund.user_id,fundingRefund.amount_cents,fundingRefund.stripe_customer_id,fundingRefund.stripe_payment_intent_id,e.objectId,`refund-settled:${fundingRefund.id}`,JSON.stringify({fundingRefundId:fundingRefund.id})]);await c.query(`INSERT INTO notifications(user_id,channel,title,body,status,idempotency_key,notification_type,priority,is_required_transactional) VALUES($1,'in_app','Refund succeeded','Stripe confirmed your robot-funding refund.','pending',$2,'REFUND_SUCCEEDED','high',true) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,[fundingRefund.user_id,`refund-success:${fundingRefund.id}`]);return;}if(fundingRefund&&e.type==='refund.failed'){await c.query(`UPDATE robot_funding_refunds SET status='FAILED',failure_code=$2,failed_at=now(),updated_at=now() WHERE id=$1`,[fundingRefund.id,e.status]);await c.query(`UPDATE downpayment_accounts SET reserved_cents=reserved_cents-$2,available_cents=available_cents+$2,updated_at=now() WHERE participant_id=$1`,[fundingRefund.user_id,fundingRefund.amount_cents]);return;}
-const disputedFunding=(await c.query(`SELECT * FROM robot_funding_payments WHERE stripe_payment_intent_id=NULLIF($1,'') OR stripe_charge_id=NULLIF($2,'') FOR UPDATE`,[e.metadata.paymentIntentId??'',e.metadata.chargeId??e.objectId])).rows[0];if(disputedFunding&&['charge.dispute.created','charge.dispute.updated','charge.dispute.closed'].includes(e.type)){const outcome=e.type==='charge.dispute.created'?'DISPUTE_OPENED':e.status==='won'?'DISPUTE_WON':e.status==='lost'?'DISPUTE_LOST':'FUNDS_WITHDRAWN';const dispute=(await c.query(`INSERT INTO robot_funding_disputes(funding_payment_id,user_id,allocation_id,stripe_dispute_id,status,amount_cents,reason) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(stripe_dispute_id) DO UPDATE SET status=EXCLUDED.status,reason=EXCLUDED.reason,updated_at=now(),resolved_at=CASE WHEN EXCLUDED.status IN('DISPUTE_WON','DISPUTE_LOST') THEN now() ELSE robot_funding_disputes.resolved_at END RETURNING *`,[disputedFunding.id,disputedFunding.user_id,disputedFunding.allocation_id,e.objectId,outcome,e.amountMinorUnits??disputedFunding.amount_cents,e.metadata.reason??null])).rows[0];await c.query(`UPDATE robot_funding_payments SET status=CASE WHEN $2='DISPUTE_LOST' THEN 'CHARGEBACK' ELSE 'DISPUTED' END,updated_at=now() WHERE id=$1`,[disputedFunding.id,outcome]);if(disputedFunding.allocation_id){await c.query(`UPDATE direct_ownership_allocations SET financial_review_required=true,updated_at=now() WHERE id=$1`,[disputedFunding.allocation_id]);await c.query(`UPDATE fractional_robot_ownership SET financial_review_required=true WHERE source_allocation_id=$1`,[disputedFunding.allocation_id]);}await c.query(`INSERT INTO unified_financial_ledger(user_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_payment_intent_id,stripe_dispute_id,idempotency_key,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(idempotency_key) DO NOTHING`,[disputedFunding.user_id,disputedFunding.allocation_id,outcome==='DISPUTE_WON'?'DISPUTE_CREDIT':'DISPUTE_DEBIT',dispute.amount_cents,outcome==='DISPUTE_WON'?'CREDIT':'DEBIT',outcome,disputedFunding.stripe_payment_intent_id,e.objectId,`dispute:${e.id}`,JSON.stringify({ownershipReviewRequired:true})]);await c.query(`INSERT INTO notifications(user_id,channel,title,body,status,idempotency_key,notification_type,priority,is_required_transactional) VALUES($1,'in_app','Payment dispute opened','A Stripe dispute requires financial review. Ownership is not silently removed.','pending',$2,'DISPUTE_OPENED','high',true) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,[disputedFunding.user_id,`dispute:${e.objectId}`]);return;}const funding=(await c.query(`SELECT * FROM robot_funding_payments WHERE stripe_payment_intent_id=$1 FOR UPDATE`,[e.objectId])).rows[0];
-if(funding){if(isSettledIncomingStripeEvent(e.type)&&funding.status!=='SUCCEEDED'){await c.query(`UPDATE robot_funding_payments SET status='SUCCEEDED',stripe_charge_id=COALESCE(NULLIF($2,''),stripe_charge_id),settled_at=now(),updated_at=now() WHERE id=$1`,[funding.id,e.metadata.chargeId??'']);await c.query(`INSERT INTO unified_financial_ledger(user_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,stripe_charge_id,idempotency_key,metadata,settled_at) VALUES($1,$2,'EXTERNAL_PAYMENT_SETTLED',$3,'DEBIT','SETTLED',$4,$5,$6,$7,$8,now()) ON CONFLICT(idempotency_key) DO NOTHING`,[funding.user_id,funding.allocation_id,funding.amount_cents,funding.stripe_customer_id,e.objectId,e.metadata.chargeId??null,`settled:${funding.id}`,JSON.stringify({fundingPaymentId:funding.id,purpose:funding.purpose})]);if(funding.purpose==='DOWNPAYMENT'){await c.query(`INSERT INTO downpayment_accounts(participant_id,contributed_cents,available_cents) VALUES($1,$2,$2) ON CONFLICT(participant_id) DO UPDATE SET contributed_cents=downpayment_accounts.contributed_cents+$2,available_cents=downpayment_accounts.available_cents+$2,updated_at=now()`,[funding.user_id,funding.amount_cents]);await c.query(`INSERT INTO downpayment_queue_entries(participant_id,status) SELECT $1,'available' WHERE NOT EXISTS(SELECT 1 FROM downpayment_queue_entries WHERE participant_id=$1 AND closed_at IS NULL)`,[funding.user_id]);await c.query(`INSERT INTO unified_financial_ledger(user_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,idempotency_key,metadata,settled_at) VALUES($1,'DOWNPAYMENT_FUNDED',$2,'CREDIT','SETTLED',$3,$4,$5,$6,now()) ON CONFLICT(idempotency_key) DO NOTHING`,[funding.user_id,funding.amount_cents,funding.stripe_customer_id,e.objectId,`downpayment-funded:${funding.id}`,JSON.stringify({fundingPaymentId:funding.id})]);}else if(funding.purpose==='DIRECT_OWNERSHIP'){const a=(await c.query(`UPDATE direct_ownership_allocations SET paid_amount_cents=paid_amount_cents+$2,status=CASE WHEN paid_amount_cents+$2>=allocated_microunits*locked_unit_price_cents/1000000 THEN 'PAID' ELSE 'PAYMENT_PROCESSING' END,version=version+1,updated_at=now() WHERE id=$1 AND status IN('PAYMENT_WINDOW_OPEN','PAYMENT_PROCESSING') AND payment_due_at>now() RETURNING *`,[funding.allocation_id,funding.amount_cents])).rows[0];if(!a)throw fail('ALLOCATION_PAYMENT_WINDOW_CLOSED',409);if(a.status==='PAID'){await c.query(`INSERT INTO fractional_robot_ownership(participant_id,contract_id,ownership_microunits,applied_amount_cents,source_allocation_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,[funding.user_id,a.contract_id,a.allocated_microunits,a.paid_amount_cents,a.id]);await c.query(`UPDATE allocation_reminder_deliveries SET status='CANCELLED' WHERE allocation_id=$1 AND status='PENDING'`,[a.id]);await c.query(`INSERT INTO unified_financial_ledger(user_id,contract_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,idempotency_key,settled_at) VALUES($1,$2,$3,'OWNERSHIP_PURCHASE',$4,'CREDIT','SETTLED',$5,$6,$7,now()) ON CONFLICT(idempotency_key) DO NOTHING`,[funding.user_id,a.contract_id,a.id,a.paid_amount_cents,funding.stripe_customer_id,e.objectId,`ownership:${a.id}`]);}}await c.query(`INSERT INTO notifications(user_id,channel,title,body,status,idempotency_key,notification_type,priority,is_required_transactional) VALUES($1,'in_app',$2,$3,'pending',$4,$5,'high',true) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,[funding.user_id,funding.purpose==='DOWNPAYMENT'?'Down payment funded':'Ownership payment succeeded','Stripe confirmed settlement and the RoboWorkPool ledger was updated.',`funding-success:${funding.id}`,funding.purpose==='DOWNPAYMENT'?'DOWNPAYMENT_FUNDED':'OWNERSHIP_PAYMENT_SUCCEEDED']);}else if(['payment_intent.payment_failed','payment_intent.canceled'].includes(e.type)){await c.query(`UPDATE robot_funding_payments SET status=CASE WHEN $2='payment_intent.canceled' THEN 'CANCELLED' ELSE 'FAILED' END,failure_code=$2,failed_at=now(),updated_at=now() WHERE id=$1`,[funding.id,e.type]);await c.query(`INSERT INTO unified_financial_ledger(user_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,idempotency_key,metadata) VALUES($1,$2,'EXTERNAL_PAYMENT_FAILED',$3,'DEBIT','FAILED',$4,$5,$6,$7) ON CONFLICT(idempotency_key) DO NOTHING`,[funding.user_id,funding.allocation_id,funding.amount_cents,funding.stripe_customer_id,e.objectId,`failed:${funding.id}`,JSON.stringify({eventType:e.type})]);}else if(e.type==='payment_intent.processing')await c.query(`UPDATE robot_funding_payments SET status='PROCESSING',updated_at=now() WHERE id=$1`,[funding.id]);return;}if(isSettledIncomingStripeEvent(e.type)){const a=(await c.query(`SELECT * FROM payment_attempts WHERE provider_payment_intent_id=$1 OR provider_charge_id=$1 FOR UPDATE`,[e.objectId])).rows[0];if(a&&a.status!=="settled"){const journal=await this.journal(c,"processor_collection",a.id,a.invoice_id,a.amount_minor_units,"1020","1000","Processor collection settled");await c.query(`UPDATE payment_attempts SET status='settled',succeeded_at=COALESCE(succeeded_at,now()),settled_at=now(),settlement_journal_entry_id=$2,updated_at=now() WHERE id=$1`,[a.id,journal]);if((e.feeMinorUnits??0)>0)await this.journal(c,"processor_fee",a.id,a.invoice_id,String(e.feeMinorUnits),"5020","1020","Processor fee");await this.completeBatchItem(c,a.settlement_batch_item_id);await c.query(`UPDATE company_billing_accounts SET last_successful_payment_at=now(),last_failed_payment_at=NULL,updated_at=now() WHERE id=$1`,[a.billing_account_id]);await c.query(`UPDATE company_invoices SET amount_paid_minor_units=LEAST(total_minor_units,amount_paid_minor_units+$2),amount_due_minor_units=GREATEST(0,amount_due_minor_units-$2),status=CASE WHEN amount_due_minor_units<=$2 THEN 'paid' ELSE 'partially_paid' END,updated_at=now() WHERE id=$1`,[a.invoice_id,a.amount_minor_units]);const company=(await c.query(`SELECT organization_id FROM hiring_companies WHERE id=$1`,[a.hiring_company_id])).rows[0];await this.emit(c,"payment.collection.settled","payment_attempt",a.id,{invoiceId:a.invoice_id});await this.notify(c,"payment.succeeded","payment_attempt",a.id,company?.organization_id??null,"info",{amountMinorUnits:Number(a.amount_minor_units),currency:"USD"});}}
-  else if(["payment_intent.payment_failed","charge.failed"].includes(e.type))await c.query(`UPDATE payment_attempts SET status='failed',failure_code=$2,failure_message_safe='Payment failed',failed_at=now(),updated_at=now() WHERE status<>'settled' AND (provider_payment_intent_id=$1 OR provider_charge_id=$1)`,[e.objectId,e.status]);
-  else if(["payout.paid"].includes(e.type)){const m=(await c.query(`SELECT t.*,p.purchase_order_id FROM manufacturer_transfers t JOIN manufacturer_payables p ON p.id=t.payable_id WHERE t.stripe_transfer_id=$1 FOR UPDATE OF t`,[e.objectId])).rows[0];if(m&&m.status!=="PAID"){await c.query(`UPDATE manufacturer_transfers SET status='PAID',paid_at=now(),updated_at=now() WHERE id=$1`,[m.id]);await c.query(`UPDATE manufacturer_payables SET status='PAID',updated_at=now() WHERE id=$1`,[m.payable_id]);await c.query(`INSERT INTO unified_financial_ledger(purchase_order_id,transaction_type,amount_cents,direction,status,stripe_connected_account_id,stripe_transfer_id,idempotency_key,metadata,settled_at) VALUES($1,'MANUFACTURER_TRANSFER',$2,'DEBIT','SETTLED',$3,$4,$5,$6,now()) ON CONFLICT(idempotency_key) DO NOTHING`,[m.purchase_order_id,m.amount_cents,m.stripe_connected_account_id,e.objectId,`manufacturer-transfer:${m.id}`,JSON.stringify({manufacturerId:m.manufacturer_id,payableId:m.payable_id})]);await this.emit(c,"manufacturer.transfer.paid","manufacturer_transfer",m.id,{payableId:m.payable_id});}const a=(await c.query(`SELECT * FROM payout_attempts WHERE provider_payout_id=$1 OR provider_transfer_id=$1 FOR UPDATE`,[e.objectId])).rows[0];if(a&&a.status!=="paid"){const statement=(await c.query(`SELECT financial_period_id FROM robot_owner_earnings_statements WHERE id=$1`,[a.statement_id])).rows[0];const journal=await this.journal(c,"owner_payout",a.id,statement.financial_period_id,a.amount_minor_units,"2000","1020","Owner payout settled",true);await c.query(`UPDATE payout_attempts SET status='paid',paid_at=now(),settlement_journal_entry_id=$2,updated_at=now() WHERE id=$1`,[a.id,journal]);await this.completeBatchItem(c,a.settlement_batch_item_id);await c.query(`UPDATE robot_owner_earnings_statements SET paid_minor_units=paid_minor_units+$2,updated_at=now() WHERE id=$1`,[a.statement_id,a.amount_minor_units]);await this.emit(c,"payout.paid","payout_attempt",a.id,{statementId:a.statement_id});await this.notify(c,"payout.paid","payout_attempt",a.id,a.robot_owner_organization_id,"info",{amountMinorUnits:Number(a.amount_minor_units),currency:"USD"});}}
-  else if(["refund.updated","charge.refunded"].includes(e.type)){const r=(await c.query(`SELECT r.*,p.hiring_company_id,h.organization_id FROM payment_refunds r JOIN payment_attempts p ON p.id=r.payment_attempt_id JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE r.provider_refund_id=$1 FOR UPDATE`,[e.objectId])).rows[0];if(r&&r.status!=="succeeded"){const journal=await this.journal(c,"company_refund",r.id,r.invoice_id,r.amount_minor_units,"1000","1020","Company refund settled");await c.query(`UPDATE payment_refunds SET status='succeeded',succeeded_at=now(),provider_status_at=$2,settlement_journal_entry_id=$3,updated_at=now() WHERE id=$1`,[r.id,e.createdAt,journal]);await c.query(`UPDATE company_invoices SET amount_paid_minor_units=GREATEST(0,amount_paid_minor_units-$2),amount_due_minor_units=LEAST(total_minor_units,amount_due_minor_units+$2),status=CASE WHEN amount_due_minor_units+$2>=total_minor_units THEN 'issued' ELSE 'partially_paid' END,updated_at=now() WHERE id=$1`,[r.invoice_id,r.amount_minor_units]);const totals=(await c.query(`SELECT COALESCE(SUM(amount_minor_units),0)::bigint total FROM payment_refunds WHERE payment_attempt_id=$1 AND status='succeeded'`,[r.payment_attempt_id])).rows[0];await c.query(`UPDATE payment_attempts SET status=CASE WHEN $2>=amount_minor_units THEN 'refunded' ELSE 'partially_refunded' END,updated_at=now() WHERE id=$1`,[r.payment_attempt_id,totals.total]);await this.emit(c,"refund.succeeded","payment_refund",r.id,{paymentAttemptId:r.payment_attempt_id});await this.notify(c,"refund.completed","payment_refund",r.id,r.organization_id,"info",{amountMinorUnits:Number(r.amount_minor_units),currency:"USD"});}}
-  else if(["refund.failed"].includes(e.type))await c.query(`UPDATE payment_refunds SET status='failed',failure_code=$2,failure_message_safe='Refund failed',failed_at=now(),provider_status_at=$3,updated_at=now() WHERE provider_refund_id=$1 AND status<>'succeeded'`,[e.objectId,e.status,e.createdAt]);
-  else if(["charge.dispute.created","charge.dispute.updated"].includes(e.type)){const payment=(await c.query(`SELECT p.*,h.organization_id FROM payment_attempts p JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE p.provider_payment_intent_id=NULLIF($1,'') OR p.provider_charge_id=NULLIF($2,'') FOR UPDATE`,[e.metadata.paymentIntentId??"",e.metadata.chargeId??""])).rows[0],dispute=(await c.query(`INSERT INTO processor_disputes(provider,provider_environment,provider_dispute_id,payment_attempt_id,invoice_id,status,amount_minor_units,currency,reason,evidence_due_at,created_by_provider_at)VALUES($1,$2,$3,$4,$5,$6,$7,'USD',$8,NULL,$9) ON CONFLICT(provider,provider_environment,provider_dispute_id) DO UPDATE SET status=EXCLUDED.status,reason=EXCLUDED.reason,updated_at=now() RETURNING *`,[this.provider.name,this.provider.environment,e.objectId,payment?.id??null,payment?.invoice_id??null,e.status,e.amountMinorUnits??payment?.amount_minor_units??0,e.metadata.reason??null,e.createdAt])).rows[0];if(payment){await c.query(`UPDATE payment_attempts SET status='disputed',updated_at=now() WHERE id=$1`,[payment.id]);if(!dispute.suspense_journal_entry_id){const journal=await this.journal(c,"processor_chargeback",dispute.id,payment.invoice_id,String(dispute.amount_minor_units),"2040","1020","Processor chargeback moved to suspense");await c.query(`UPDATE processor_disputes SET suspense_journal_entry_id=$2 WHERE id=$1`,[dispute.id,journal]);}await this.notify(c,"processor.dispute.opened","processor_dispute",dispute.id,payment.organization_id,"critical",{amountMinorUnits:Number(dispute.amount_minor_units),currency:"USD"});}await this.emit(c,"processor.dispute.updated","processor_dispute",dispute.id,{status:e.status});}
-  else if(["transfer.created","transfer.updated"].includes(e.type)){await c.query(`UPDATE payout_attempts SET status='processing',updated_at=now() WHERE provider_transfer_id=$1 AND status NOT IN('paid','reversed')`,[e.objectId]);await c.query(`UPDATE manufacturer_transfers SET status='PROCESSING',updated_at=now() WHERE stripe_transfer_id=$1 AND status NOT IN('PAID','REVERSED')`,[e.objectId]);}
-  else if(["payout.created","payout.updated"].includes(e.type))await c.query(`UPDATE payout_attempts SET status='processing',updated_at=now() WHERE provider_payout_id=$1 AND status NOT IN('paid','reversed')`,[e.objectId]);
-  else if(["account.external_account.created","account.external_account.updated","account.external_account.deleted"].includes(e.type)){const linked=e.type!=="account.external_account.deleted";await c.query(`UPDATE payment_provider_connected_accounts SET bank_account_linked=$2,last_synced_at=now(),updated_at=now() WHERE provider_account_id=$1`,[e.metadata.connectedAccountId,linked]);await c.query(`UPDATE user_financial_profiles SET bank_account_linked=$2,updated_at=now() WHERE stripe_connected_account_id=$1`,[e.metadata.connectedAccountId,linked]);await c.query(`UPDATE manufacturer_financial_profiles SET bank_account_linked=$2,updated_at=now() WHERE stripe_connected_account_id=$1`,[e.metadata.connectedAccountId,linked]);}
-  else if(e.type==="account.updated"){const requirements=JSON.parse(e.metadata.requirements??"[]")as string[],active=e.metadata.transfersEnabled==="true"&&e.metadata.payoutsEnabled==="true",status=active?"active":e.metadata.detailsSubmitted==="true"?"pending_verification":"onboarding";const account=(await c.query(`UPDATE payment_provider_connected_accounts SET status=$2,details_submitted=$3,transfers_enabled=$4,payouts_enabled=$5,requirements_currently_due=$6::jsonb,last_synced_at=now(),updated_at=now() WHERE provider_account_id=$1 RETURNING *`,[e.objectId,status,e.metadata.detailsSubmitted==="true",e.metadata.transfersEnabled==="true",e.metadata.payoutsEnabled==="true",JSON.stringify(requirements)])).rows[0];if(account){await this.emit(c,active?"payout.account.enabled":"payout.account.verification_pending","payout_account",account.id,{status});await this.notify(c,active?"payout.account.enabled":"payout.account.verification_required","payout_account",account.id,account.robot_owner_organization_id,active?"info":"warning",{status});}}  else if(["payout.failed","transfer.reversed"].includes(e.type))await c.query(`UPDATE payout_attempts SET status=CASE WHEN $2='transfer.reversed' THEN 'reversed' ELSE 'failed' END,failure_code=$3,failure_message_safe='Payout failed',failed_at=now(),updated_at=now() WHERE status<>'paid' AND (provider_payout_id=$1 OR provider_transfer_id=$1)`,[e.objectId,e.type,e.status]);await c.query(`UPDATE manufacturer_transfers SET status=CASE WHEN $2='transfer.reversed' THEN 'REVERSED' ELSE 'FAILED' END,failure_code=$3,updated_at=now() WHERE stripe_transfer_id=$1 AND status<>'PAID'`,[e.objectId,e.type,e.status]);await c.query(`UPDATE manufacturer_payables p SET status='FAILED',updated_at=now() FROM manufacturer_transfers t WHERE t.payable_id=p.id AND t.stripe_transfer_id=$1 AND p.status<>'PAID'`,[e.objectId]);}
- private async journal(c:PoolClient,type:string,sourceId:string,referenceId:string,amount:string,debitCode:string,creditCode:string,description:string,referenceIsPeriod=false){const period=referenceIsPeriod?{id:referenceId}:(await c.query(`SELECT financial_period_id id FROM company_invoices WHERE id=$1`,[referenceId])).rows[0],id=crypto.randomUUID(),accounts=await c.query(`SELECT id,account_code FROM financial_accounts WHERE account_code=ANY($1::text[])`,[[debitCode,creditCode]]),map=new Map(accounts.rows.map(r=>[r.account_code,r.id]));await c.query(`INSERT INTO journal_entries(id,journal_number,entry_type,status,effective_at,financial_period_id,source_type,source_id,description,currency,correlation_id)VALUES($1,$2,$3,'draft',now(),$4,$3,$5,$6,'USD',$7)`,[id,`RWP-JRN-${Date.now()}-${id.slice(0,8)}`,type,period.id,sourceId,description,crypto.randomUUID()]);await c.query(`INSERT INTO journal_lines(journal_entry_id,financial_account_id,line_number,debit_minor_units,credit_minor_units,description)VALUES($1,$2,1,$4,0,$6),($1,$3,2,0,$4,$6)`,[id,map.get(debitCode),map.get(creditCode),amount,0,description]);await c.query(`UPDATE journal_entries SET status='posted' WHERE id=$1`,[id]);return id;}
- async metrics(userId:string){await this.admin(userId);const [payments,payouts,refunds,webhooks,disputes,exceptions,clearing]=await Promise.all([this.pool.query(`SELECT status,COUNT(*)::integer count FROM payment_attempts GROUP BY status`),this.pool.query(`SELECT status,COUNT(*)::integer count FROM payout_attempts GROUP BY status`),this.pool.query(`SELECT status,COUNT(*)::integer count FROM payment_refunds GROUP BY status`),this.pool.query(`SELECT processing_status status,COUNT(*)::integer count FROM payment_processor_events GROUP BY processing_status`),this.pool.query(`SELECT COUNT(*)::integer count FROM processor_disputes WHERE status NOT IN('won','lost','closed')`),this.pool.query(`SELECT COUNT(*)::integer count FROM payment_reconciliation_exceptions WHERE status='open'`),this.pool.query(`SELECT COALESCE(SUM(l.debit_minor_units-l.credit_minor_units),0)::bigint balance FROM journal_lines l JOIN financial_accounts a ON a.id=l.financial_account_id JOIN journal_entries e ON e.id=l.journal_entry_id WHERE a.account_code='1020' AND e.status='posted'`)]);const lines=["# TYPE rwp_payment_attempts_total counter",...payments.rows.map(r=>`rwp_payment_attempts_total{status="${r.status}"} ${r.count}`),"# TYPE rwp_payout_attempts_total counter",...payouts.rows.map(r=>`rwp_payout_attempts_total{status="${r.status}"} ${r.count}`),"# TYPE rwp_refunds_total counter",...refunds.rows.map(r=>`rwp_refunds_total{status="${r.status}"} ${r.count}`),"# TYPE rwp_payment_webhooks_total counter",...webhooks.rows.map(r=>`rwp_payment_webhooks_total{status="${r.status}"} ${r.count}`),`rwp_processor_disputes_open ${disputes.rows[0].count}`,`rwp_payment_reconciliation_exceptions_open ${exceptions.rows[0].count}`,`rwp_processor_clearing_minor_units ${clearing.rows[0].balance}`];return lines.join("\n")+"\n";} async platform(userId:string,resource:string){await this.admin(userId);const table:Record<string,string>={"payment-attempts":"payment_attempts","payout-attempts":"payout_attempts","refunds":"payment_refunds","processor-events":"payment_processor_events","processor-disputes":"processor_disputes","payment-reconciliation-runs":"payment_reconciliation_runs"},name=table[resource];if(!name)throw fail("PAYMENT_RESOURCE_UNKNOWN",404);return{items:(await this.pool.query(`SELECT * FROM ${name} ORDER BY created_at DESC LIMIT 200`)).rows};}
+import { createHash } from "node:crypto";
+import type { Pool, PoolClient } from "pg";
+import type {
+  PaymentConfig,
+  PaymentProvider,
+  VerifiedWebhookEvent,
+} from "@nation-reserve/payments";
+const fail = (code: string, statusCode = 400) =>
+  Object.assign(new Error(code), { code, statusCode });
+export const PLATFORM_STRIPE_EVENTS = new Set([
+  "payment_intent.succeeded",
+  "payment_intent.processing",
+  "payment_intent.payment_failed",
+  "payment_intent.canceled",
+  "charge.succeeded",
+  "charge.failed",
+  "charge.refunded",
+  "charge.refund.updated",
+  "charge.dispute.created",
+  "charge.dispute.updated",
+  "charge.dispute.closed",
+  "refund.created",
+  "refund.updated",
+  "refund.failed",
+  "transfer.created",
+  "transfer.updated",
+  "transfer.reversed",
+  "identity.verification_session.created",
+  "identity.verification_session.processing",
+  "identity.verification_session.verified",
+  "identity.verification_session.requires_input",
+  "identity.verification_session.canceled",
+]);
+export const CONNECT_STRIPE_EVENTS = new Set([
+  "account.updated",
+  "account.external_account.created",
+  "account.external_account.updated",
+  "account.external_account.deleted",
+  "payout.created",
+  "payout.updated",
+  "payout.paid",
+  "payout.failed",
+]);
+export const isSettledIncomingStripeEvent = (eventType: string) =>
+  eventType === "payment_intent.succeeded" || eventType === "charge.succeeded";
+export const isProcessedWebhookDuplicate = (status: string) =>
+  status === "processed" || status === "ignored";
+export class PostgresPaymentService {
+  constructor(
+    private readonly pool: Pool,
+    private readonly provider: PaymentProvider,
+    private readonly config: PaymentConfig,
+  ) {}
+  private async member(userId: string, organizationId: string) {
+    if (
+      !(
+        await this.pool.query(
+          `SELECT 1 FROM organization_memberships WHERE user_id=$1 AND organization_id=$2 AND status='active'`,
+          [userId, organizationId],
+        )
+      ).rows[0]
+    )
+      throw fail("FORBIDDEN", 403);
+  }
+  private async admin(userId: string) {
+    if (
+      !(
+        await this.pool.query(
+          `SELECT 1 FROM platform_role_assignments WHERE user_id=$1 AND status='active'`,
+          [userId],
+        )
+      ).rows[0]
+    )
+      throw fail("FORBIDDEN", 403);
+  }
+  async organization(userId: string, organizationId: string, resource: string) {
+    await this.member(userId, organizationId);
+    const queries: Record<string, string> = {
+      "payment-methods": `SELECT m.id,m.payment_method_type,m.display_brand,m.display_last4,m.expiration_month,m.expiration_year,m.status,m.is_default,m.verification_status,m.created_at FROM company_payment_methods m JOIN hiring_companies h ON h.id=m.hiring_company_id WHERE h.organization_id=$1 AND m.removed_at IS NULL ORDER BY m.is_default DESC,m.created_at DESC`,
+      "payout-account": `SELECT provider,status,details_submitted,transfers_enabled,payouts_enabled,requirements_currently_due,disabled_reason,country_code,last_synced_at FROM payment_provider_connected_accounts WHERE robot_owner_organization_id=$1`,
+      "payment-attempts": `SELECT p.* FROM payment_attempts p JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE h.organization_id=$1 ORDER BY p.created_at DESC LIMIT 100`,
+      "payout-attempts": `SELECT * FROM payout_attempts WHERE robot_owner_organization_id=$1 ORDER BY created_at DESC LIMIT 100`,
+    };
+    const q = queries[resource];
+    if (!q) throw fail("PAYMENT_RESOURCE_UNKNOWN", 404);
+    return { items: (await this.pool.query(q, [organizationId])).rows };
+  }
+  async contractDownpayment(
+    userId: string,
+    organizationId: string,
+    contractId: string,
+  ) {
+    await this.member(userId, organizationId);
+    const row = (
+      await this.pool.query(
+        `SELECT d.id,d.status,d.basis_points "basisPoints",
+      d.estimated_contract_value_cents "estimatedContractValueCents",
+      d.required_amount_cents "requiredAmountCents",d.failure_code "failureCode",
+      d.settled_at "settledAt"
+    FROM employer_contract_downpayments d
+    JOIN contracts c ON c.id=d.contract_id
+    JOIN hiring_companies h ON h.id=c.hiring_company_id
+    WHERE d.contract_id=$1 AND h.organization_id=$2`,
+        [contractId, organizationId],
+      )
+    ).rows[0];
+    if (!row) throw fail("EMPLOYER_DOWNPAYMENT_NOT_READY", 409);
+    return row;
+  }
+  async fundContractDownpayment(
+    userId: string,
+    organizationId: string,
+    contractId: string,
+    paymentMethodId: string | undefined,
+    idempotencyKey: string,
+  ) {
+    if (!this.config.PAYMENT_EXECUTION_ENABLED)
+      throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    await this.member(userId, organizationId);
+    const downpayment = (
+      await this.pool.query(
+        `SELECT d.*,h.organization_id,b.id billing_account_id
+    FROM employer_contract_downpayments d
+    JOIN contracts c ON c.id=d.contract_id
+    JOIN hiring_companies h ON h.id=c.hiring_company_id
+    JOIN company_billing_accounts b ON b.hiring_company_id=h.id
+    WHERE d.contract_id=$1 AND h.organization_id=$2`,
+        [contractId, organizationId],
+      )
+    ).rows[0];
+    if (!downpayment) throw fail("EMPLOYER_DOWNPAYMENT_NOT_READY", 409);
+    if (downpayment.status === "settled") return downpayment;
+    if (
+      downpayment.provider_payment_intent_id &&
+      ["processing", "requires_action"].includes(downpayment.status)
+    )
+      return downpayment;
+    const customer = await this.customer(organizationId);
+    const method = (
+      await this.pool.query(
+        `SELECT * FROM company_payment_methods
+    WHERE billing_account_id=$1 AND status='active'
+      AND (($2::uuid IS NOT NULL AND id=$2) OR ($2::uuid IS NULL AND is_default))
+    ORDER BY is_default DESC LIMIT 1`,
+        [downpayment.billing_account_id, paymentMethodId ?? null],
+      )
+    ).rows[0];
+    if (!method) throw fail("PAYMENT_METHOD_NOT_AVAILABLE", 409);
+    const remote = await this.provider.createFundingPayment({
+      customerId: customer.provider_customer_id,
+      paymentMethodId: method.provider_payment_method_id,
+      amountMinorUnits: Number(downpayment.required_amount_cents),
+      currency: "USD",
+      idempotencyKey,
+      metadata: {
+        contract_downpayment_id: downpayment.id,
+        contract_id: contractId,
+        organization_id: organizationId,
+      },
+      returnUrl: this.config.PAYMENT_METHOD_SETUP_RETURN_URL,
+    });
+    const status =
+      remote.status === "requires_action"
+        ? "requires_action"
+        : remote.status === "failed"
+          ? "failed"
+          : "processing";
+    const row = (
+      await this.pool.query(
+        `UPDATE employer_contract_downpayments SET
+      status=$2,provider=$3,provider_environment=$4,provider_customer_id=$5,
+      provider_payment_intent_id=$6,payment_method_id=$7,idempotency_key=$8,
+      failure_code=$9,updated_at=now()
+    WHERE id=$1 RETURNING *`,
+        [
+          downpayment.id,
+          status,
+          this.provider.name,
+          this.provider.environment,
+          customer.provider_customer_id,
+          remote.providerObjectId,
+          method.id,
+          idempotencyKey,
+          remote.failureCode ?? null,
+        ],
+      )
+    ).rows[0];
+    return {
+      ...row,
+      ...(remote.clientSecret ? { clientSecret: remote.clientSecret } : {}),
+    };
+  }
+  private async customer(organizationId: string) {
+    let row = (
+      await this.pool.query(
+        `SELECT p.*,h.id hiring_company_id,b.id billing_account_id,o.legal_name FROM payment_provider_customers p JOIN hiring_companies h ON h.organization_id=p.organization_id JOIN company_billing_accounts b ON b.hiring_company_id=h.id JOIN organizations o ON o.id=p.organization_id WHERE p.organization_id=$1 AND p.provider=$2 AND p.provider_environment=$3`,
+        [organizationId, this.provider.name, this.provider.environment],
+      )
+    ).rows[0];
+    if (row) return row;
+    const base = (
+      await this.pool.query(
+        `SELECT h.id hiring_company_id,b.id billing_account_id,o.legal_name FROM organizations o JOIN hiring_companies h ON h.organization_id=o.id JOIN company_billing_accounts b ON b.hiring_company_id=h.id WHERE o.id=$1`,
+        [organizationId],
+      )
+    ).rows[0];
+    if (!base) throw fail("BILLING_ACCOUNT_NOT_FOUND", 404);
+    const remote = await this.provider.createCompanyCustomer({
+      organizationId,
+      name: base.legal_name,
+      idempotencyKey: `customer-${organizationId}`,
+    });
+    row = (
+      await this.pool.query(
+        `INSERT INTO payment_provider_customers(provider,provider_environment,organization_id,organization_type,provider_customer_id,status,name_snapshot)VALUES($1,$2,$3,'hiring_company',$4,'active',$5) ON CONFLICT(provider,provider_environment,organization_id) DO UPDATE SET updated_at=now() RETURNING *`,
+        [
+          this.provider.name,
+          this.provider.environment,
+          organizationId,
+          remote.id,
+          base.legal_name,
+        ],
+      )
+    ).rows[0];
+    return { ...base, ...row };
+  }
+  async setDefaultPaymentMethod(userId: string, organizationId: string, id: string) {
+    await this.member(userId, organizationId);
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const target = (
+        await client.query(
+          `SELECT m.id,m.billing_account_id FROM company_payment_methods m JOIN hiring_companies h ON h.id=m.hiring_company_id WHERE m.id=$1 AND h.organization_id=$2 AND m.status='active' FOR UPDATE`,
+          [id, organizationId],
+        )
+      ).rows[0];
+      if (!target) throw fail("PAYMENT_METHOD_NOT_FOUND", 404);
+      await client.query(
+        `UPDATE company_payment_methods SET is_default=(id=$1),updated_at=now() WHERE billing_account_id=$2 AND status='active'`,
+        [id, target.billing_account_id],
+      );
+      await client.query(
+        `UPDATE payment_provider_customers SET default_payment_method_id=$1,updated_at=now() WHERE organization_id=$2 AND provider=$3 AND provider_environment=$4`,
+        [id, organizationId, this.provider.name, this.provider.environment],
+      );
+      await client.query("COMMIT");
+      return { id, isDefault: true };
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+  async refreshPayoutAccount(userId: string, organizationId: string) {
+    await this.member(userId, organizationId);
+    const account = (
+      await this.pool.query(
+        `SELECT * FROM payment_provider_connected_accounts WHERE robot_owner_organization_id=$1 AND provider=$2 AND provider_environment=$3`,
+        [organizationId, this.provider.name, this.provider.environment],
+      )
+    ).rows[0];
+    if (!account) throw fail("PAYOUT_ACCOUNT_NOT_FOUND", 404);
+    const remote = await this.provider.retrieveConnectedAccount({
+        accountId: account.provider_account_id,
+      }),
+      status =
+        remote.payoutsEnabled && remote.transfersEnabled
+          ? "active"
+          : remote.detailsSubmitted
+            ? "pending_verification"
+            : "onboarding";
+    return (
+      await this.pool.query(
+        `UPDATE payment_provider_connected_accounts SET status=$2,details_submitted=$3,transfers_enabled=$4,payouts_enabled=$5,requirements_currently_due=$6::jsonb,last_synced_at=now(),updated_at=now() WHERE id=$1 RETURNING provider,status,details_submitted,transfers_enabled,payouts_enabled,requirements_currently_due,last_synced_at`,
+        [
+          account.id,
+          status,
+          remote.detailsSubmitted,
+          remote.transfersEnabled,
+          remote.payoutsEnabled,
+          JSON.stringify(remote.requirements),
+        ],
+      )
+    ).rows[0];
+  }
+  async setupPaymentMethod(userId: string, organizationId: string) {
+    await this.member(userId, organizationId);
+    const c = await this.customer(organizationId);
+    return this.provider.createPaymentMethodSetup({
+      customerId: c.provider_customer_id,
+      returnUrl: this.config.PAYMENT_METHOD_SETUP_RETURN_URL,
+      idempotencyKey: `setup-${organizationId}-${crypto.randomUUID()}`,
+    });
+  }
+  async confirmPaymentMethod(
+    userId: string,
+    organizationId: string,
+    paymentMethodId: string,
+    makeDefault = true,
+  ) {
+    await this.member(userId, organizationId);
+    const c = await this.customer(organizationId),
+      method = await this.provider.retrievePaymentMethod({
+        customerId: c.provider_customer_id,
+        paymentMethodId,
+      });
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      if (makeDefault)
+        await client.query(
+          `UPDATE company_payment_methods SET is_default=false,updated_at=now() WHERE billing_account_id=$1`,
+          [c.billing_account_id],
+        );
+      const row = (
+        await client.query(
+          `INSERT INTO company_payment_methods(hiring_company_id,billing_account_id,provider,provider_environment,provider_customer_id,provider_payment_method_id,payment_method_type,display_brand,display_last4,expiration_month,expiration_year,status,is_default,verification_status)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',$12,'verified') ON CONFLICT(provider,provider_environment,provider_payment_method_id) DO UPDATE SET status='active',is_default=EXCLUDED.is_default,updated_at=now() RETURNING id,payment_method_type,display_brand,display_last4,status,is_default`,
+          [
+            c.hiring_company_id,
+            c.billing_account_id,
+            this.provider.name,
+            this.provider.environment,
+            c.provider_customer_id,
+            method.id,
+            method.type,
+            method.brand ?? null,
+            method.last4 ?? null,
+            method.expirationMonth ?? null,
+            method.expirationYear ?? null,
+            makeDefault,
+          ],
+        )
+      ).rows[0];
+      await client.query(
+        `UPDATE payment_provider_customers SET default_payment_method_id=CASE WHEN $2 THEN $1 ELSE default_payment_method_id END,updated_at=now() WHERE id=$3`,
+        [row.id, makeDefault, c.id],
+      );
+      await client.query("COMMIT");
+      return row;
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+  async removePaymentMethod(userId: string, organizationId: string, id: string) {
+    await this.member(userId, organizationId);
+    const row = (
+      await this.pool.query(
+        `UPDATE company_payment_methods m SET status='removed',is_default=false,removed_at=now(),updated_at=now() FROM hiring_companies h WHERE m.id=$1 AND m.hiring_company_id=h.id AND h.organization_id=$2 AND NOT EXISTS(SELECT 1 FROM payment_attempts p WHERE p.payment_method_id=m.id AND p.status IN('created','submitted','requires_action','processing','authorized','succeeded')) RETURNING m.id,m.status`,
+        [id, organizationId],
+      )
+    ).rows[0];
+    if (!row) throw fail("PAYMENT_METHOD_NOT_FOUND_OR_IN_USE", 409);
+    return row;
+  }
+  async payoutOnboarding(userId: string, organizationId: string) {
+    await this.member(userId, organizationId);
+    let account = (
+      await this.pool.query(
+        `SELECT * FROM payment_provider_connected_accounts WHERE robot_owner_organization_id=$1 AND provider=$2 AND provider_environment=$3`,
+        [organizationId, this.provider.name, this.provider.environment],
+      )
+    ).rows[0];
+    if (!account) {
+      const remote = await this.provider.createOwnerConnectedAccount({
+        organizationId,
+        country: this.config.STRIPE_PLATFORM_COUNTRY,
+        idempotencyKey: `connected-${organizationId}`,
+      });
+      account = (
+        await this.pool.query(
+          `INSERT INTO payment_provider_connected_accounts(robot_owner_organization_id,provider,provider_environment,provider_account_id,account_type,status,country_code,default_currency)VALUES($1,$2,$3,$4,'express','onboarding',$5,'USD') RETURNING *`,
+          [
+            organizationId,
+            this.provider.name,
+            this.provider.environment,
+            remote.id,
+            this.config.STRIPE_PLATFORM_COUNTRY,
+          ],
+        )
+      ).rows[0];
+    }
+    return this.provider.createOwnerOnboardingLink({
+      accountId: account.provider_account_id,
+      returnUrl: this.config.PAYOUT_ONBOARDING_RETURN_URL,
+      refreshUrl: this.config.PAYOUT_ONBOARDING_REFRESH_URL,
+    });
+  }
+  async collect(userId: string, invoiceId: string, organizationId?: string) {
+    if (organizationId) {
+      await this.member(userId, organizationId);
+      const owned = (
+        await this.pool.query(
+          `SELECT 1 FROM company_invoices i JOIN hiring_companies h ON h.id=i.hiring_company_id WHERE i.id=$1 AND h.organization_id=$2`,
+          [invoiceId, organizationId],
+        )
+      ).rows[0];
+      if (!owned) throw fail("INVOICE_NOT_FOUND", 404);
+    } else await this.admin(userId);
+    if (!this.config.PAYMENT_EXECUTION_ENABLED)
+      throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    const key = `invoice-${invoiceId}`,
+      attemptId = crypto.randomUUID();
+    const row = (
+      await this.pool.query(
+        `INSERT INTO payment_attempts(id,attempt_number,provider,provider_environment,attempt_type,status,hiring_company_id,billing_account_id,invoice_id,payment_method_id,currency,amount_minor_units,idempotency_key,provider_customer_id,initiated_at) SELECT $1,$2,$3,$4,'invoice_collection','created',i.hiring_company_id,i.billing_account_id,i.id,m.id,'USD',i.amount_due_minor_units,$5,p.provider_customer_id,now() FROM company_invoices i JOIN company_billing_accounts b ON b.id=i.billing_account_id AND b.billing_status IN('active','past_due') JOIN payment_provider_customers p ON p.organization_id=(SELECT organization_id FROM hiring_companies WHERE id=i.hiring_company_id) JOIN company_payment_methods m ON m.billing_account_id=i.billing_account_id AND m.is_default AND m.status='active' WHERE i.id=$6 AND i.status IN('issued','partially_paid','past_due') AND i.amount_due_minor_units>0 AND NOT EXISTS(SELECT 1 FROM financial_holds fh WHERE fh.invoice_id=i.id AND fh.status='active') AND NOT EXISTS(SELECT 1 FROM financial_disputes fd WHERE fd.invoice_id=i.id AND fd.status NOT IN('resolved','closed','rejected')) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,
+        [
+          attemptId,
+          `PAY-${Date.now()}-${attemptId.slice(0, 8)}`,
+          this.provider.name,
+          this.provider.environment,
+          key,
+          invoiceId,
+        ],
+      )
+    ).rows[0];
+    if (!row) throw fail("INVOICE_NOT_COLLECTIBLE", 409);
+    try {
+      const remote = await this.provider.createInvoiceCollection({
+        customerId: row.provider_customer_id,
+        paymentMethodId: (
+          await this.pool.query(
+            `SELECT provider_payment_method_id FROM company_payment_methods WHERE id=$1`,
+            [row.payment_method_id],
+          )
+        ).rows[0].provider_payment_method_id,
+        amountMinorUnits: Number(row.amount_minor_units),
+        currency: "USD",
+        idempotencyKey: key,
+      });
+      return (
+        await this.pool.query(
+          `UPDATE payment_attempts SET status=$2,provider_payment_intent_id=$3,requires_action=$4,updated_at=now() WHERE id=$1 RETURNING *`,
+          [
+            row.id,
+            remote.status,
+            remote.providerObjectId,
+            remote.status === "requires_action",
+          ],
+        )
+      ).rows[0];
+    } catch (e: any) {
+      await this.pool.query(
+        `UPDATE payment_attempts SET status=$2,failure_code=$3,failure_message_safe='Provider request failed',failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,
+        [
+          row.id,
+          e.outcome === "unknown" ? "unknown" : "failed",
+          e.code ?? "PAYMENT_PROVIDER_ERROR",
+        ],
+      );
+      throw e;
+    }
+  }
+  async payout(userId: string, statementId: string) {
+    await this.admin(userId);
+    if (!this.config.PAYMENT_EXECUTION_ENABLED)
+      throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    const key = `statement-${statementId}`,
+      id = crypto.randomUUID();
+    const row = (
+      await this.pool.query(
+        `INSERT INTO payout_attempts(id,attempt_number,provider,provider_environment,status,robot_owner_organization_id,connected_account_id,statement_id,currency,amount_minor_units,idempotency_key,initiated_at) SELECT $1,$2,$3,$4,'created',s.robot_owner_organization_id,a.id,s.id,'USD',s.net_earning_minor_units-s.held_minor_units,$5,now() FROM robot_owner_earnings_statements s JOIN payment_provider_connected_accounts a ON a.robot_owner_organization_id=s.robot_owner_organization_id AND a.status='active' WHERE s.id=$6 AND s.status='issued' AND s.net_earning_minor_units-s.held_minor_units >= $7 AND NOT EXISTS(SELECT 1 FROM financial_holds fh WHERE (fh.statement_id=s.id OR fh.organization_id=s.robot_owner_organization_id) AND fh.status='active') ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,
+        [
+          id,
+          `OUT-${Date.now()}-${id.slice(0, 8)}`,
+          this.provider.name,
+          this.provider.environment,
+          key,
+          statementId,
+          this.config.OWNER_MINIMUM_PAYOUT_MINOR_UNITS,
+        ],
+      )
+    ).rows[0];
+    if (!row) throw fail("STATEMENT_NOT_PAYABLE", 409);
+    const account = (
+      await this.pool.query(
+        `SELECT provider_account_id FROM payment_provider_connected_accounts WHERE id=$1`,
+        [row.connected_account_id],
+      )
+    ).rows[0];
+    try {
+      const remote = await this.provider.createOwnerPayout({
+        accountId: account.provider_account_id,
+        amountMinorUnits: Number(row.amount_minor_units),
+        currency: "USD",
+        idempotencyKey: key,
+      });
+      return (
+        await this.pool.query(
+          `UPDATE payout_attempts SET status=$2,provider_transfer_id=$3,updated_at=now() WHERE id=$1 RETURNING *`,
+          [row.id, remote.status, remote.providerObjectId],
+        )
+      ).rows[0];
+    } catch (e: any) {
+      await this.pool.query(
+        `UPDATE payout_attempts SET status=$2,failure_code=$3,failure_message_safe='Provider request failed',failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,
+        [
+          row.id,
+          e.outcome === "unknown" ? "unknown" : "failed",
+          e.code ?? "PAYMENT_PROVIDER_ERROR",
+        ],
+      );
+      throw e;
+    }
+  }
+  private async emit(
+    c: PoolClient,
+    type: string,
+    aggregateType: string,
+    id: string,
+    payload: Record<string, unknown> = {},
+  ) {
+    await c.query(
+      `INSERT INTO outbox_events(id,event_type,aggregate_type,aggregate_id,occurred_at,payload)VALUES(gen_random_uuid(),$1,$2,$3,now(),$4)`,
+      [type, aggregateType, id, payload],
+    );
+  }
+  private async notify(
+    c: PoolClient,
+    type: string,
+    resourceType: string,
+    id: string,
+    organizationId: string | null,
+    severity: "info" | "warning" | "critical",
+    payload: Record<string, unknown> = {},
+  ) {
+    await c.query(
+      `INSERT INTO payment_notifications(audience_type,organization_id,notification_type,resource_type,resource_id,severity,mandatory,safe_payload)VALUES(CASE WHEN $4::uuid IS NULL THEN 'platform' ELSE 'organization' END,$4,$1,$2,$3,$5,true,$6) ON CONFLICT(notification_type,resource_type,resource_id) DO NOTHING`,
+      [type, resourceType, id, organizationId, severity, payload],
+    );
+  }
+  async refund(
+    userId: string,
+    paymentAttemptId: string,
+    input: { amountMinorUnits: number; financialAdjustmentId: string },
+  ) {
+    await this.admin(userId);
+    if (!this.config.PAYMENT_EXECUTION_ENABLED)
+      throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    const client = await this.pool.connect();
+    let row: any;
+    try {
+      await client.query("BEGIN");
+      const payment = (
+        await client.query(
+          `SELECT p.*,h.organization_id FROM payment_attempts p JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE p.id=$1 AND p.status IN('settled','partially_refunded','disputed') FOR UPDATE`,
+          [paymentAttemptId],
+        )
+      ).rows[0];
+      if (!payment) throw fail("PAYMENT_NOT_REFUNDABLE", 409);
+      const adjustment = (
+        await client.query(
+          `SELECT * FROM financial_adjustments WHERE id=$1 AND invoice_id=$2 AND status IN('approved','posted') AND amount_minor_units>=$3 FOR UPDATE`,
+          [input.financialAdjustmentId, payment.invoice_id, input.amountMinorUnits],
+        )
+      ).rows[0];
+      if (!adjustment) throw fail("REFUND_ADJUSTMENT_REQUIRED", 409);
+      const id = crypto.randomUUID(),
+        key = `refund-${paymentAttemptId}-${input.financialAdjustmentId}-${input.amountMinorUnits}`;
+      row = (
+        await client.query(
+          `INSERT INTO payment_refunds(id,refund_number,provider,provider_environment,payment_attempt_id,invoice_id,financial_adjustment_id,amount_minor_units,currency,status,idempotency_key,initiated_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,'USD','created',$9,now()) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,
+          [
+            id,
+            `REF-${Date.now()}-${id.slice(0, 8)}`,
+            this.provider.name,
+            this.provider.environment,
+            payment.id,
+            payment.invoice_id,
+            adjustment.id,
+            input.amountMinorUnits,
+            key,
+          ],
+        )
+      ).rows[0];
+      await this.emit(client, "refund.created", "payment_refund", row.id, {
+        paymentAttemptId,
+      });
+      await client.query("COMMIT");
+      row.provider_payment_intent_id = payment.provider_payment_intent_id;
+      row.organization_id = payment.organization_id;
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+    try {
+      const remote = await this.provider.createRefund({
+        providerPaymentId: row.provider_payment_intent_id,
+        amountMinorUnits: Number(row.amount_minor_units),
+        idempotencyKey: row.idempotency_key,
+      });
+      return (
+        await this.pool.query(
+          `UPDATE payment_refunds SET status=$2,provider_refund_id=$3,updated_at=now() WHERE id=$1 RETURNING *`,
+          [row.id, remote.status, remote.providerObjectId],
+        )
+      ).rows[0];
+    } catch (e: any) {
+      await this.pool.query(
+        `UPDATE payment_refunds SET status=$2,failure_code=$3,failure_message_safe='Refund provider request failed',failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,
+        [
+          row.id,
+          e.outcome === "unknown" ? "unknown" : "failed",
+          e.code ?? "PAYMENT_PROVIDER_ERROR",
+        ],
+      );
+      throw e;
+    }
+  }
+  async submitSettlementBatch(userId: string, id: string) {
+    await this.admin(userId);
+    if (!this.config.PAYMENT_EXECUTION_ENABLED)
+      throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    const client = await this.pool.connect();
+    let items: any[];
+    try {
+      await client.query("BEGIN");
+      const batch = (
+        await client.query(
+          `SELECT * FROM settlement_batches WHERE id=$1 AND status IN('approved','ready_for_submission') FOR UPDATE`,
+          [id],
+        )
+      ).rows[0];
+      if (!batch) throw fail("SETTLEMENT_BATCH_NOT_SUBMITTABLE", 409);
+      items = (
+        await client.query(
+          `SELECT * FROM settlement_batch_items WHERE settlement_batch_id=$1 AND status='ready' ORDER BY created_at FOR UPDATE`,
+          [id],
+        )
+      ).rows;
+      await client.query(
+        `UPDATE settlement_batches SET status='submitted',submitted_at=now(),external_processor=$2,updated_at=now() WHERE id=$1`,
+        [id, this.provider.name],
+      );
+      await this.emit(client, "settlement.batch.submitted", "settlement_batch", id, {
+        itemCount: items.length,
+      });
+      await client.query("COMMIT");
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
+    let submitted = 0,
+      failed = 0;
+    for (const item of items) {
+      try {
+        if (item.item_type === "invoice_collection") {
+          const attempt = await this.collect(userId, item.invoice_id);
+          await this.pool.query(
+            `UPDATE payment_attempts SET settlement_batch_id=$2,settlement_batch_item_id=$3 WHERE id=$1`,
+            [attempt.id, id, item.id],
+          );
+          await this.pool.query(
+            `UPDATE settlement_batch_items SET status='submitted',external_reference=$2,updated_at=now() WHERE id=$1`,
+            [item.id, attempt.id],
+          );
+        } else {
+          const attempt = await this.payout(userId, item.statement_id);
+          await this.pool.query(
+            `UPDATE payout_attempts SET settlement_batch_id=$2,settlement_batch_item_id=$3 WHERE id=$1`,
+            [attempt.id, id, item.id],
+          );
+          await this.pool.query(
+            `UPDATE settlement_batch_items SET status='submitted',external_reference=$2,updated_at=now() WHERE id=$1`,
+            [item.id, attempt.id],
+          );
+        }
+        submitted++;
+      } catch {
+        failed++;
+        await this.pool.query(
+          `UPDATE settlement_batch_items SET status='failed',hold_reason='Submission failed; review attempt history',updated_at=now() WHERE id=$1`,
+          [item.id],
+        );
+      }
+    }
+    const status =
+      submitted === 0 && failed > 0
+        ? "failed"
+        : failed > 0
+          ? "partially_completed"
+          : "processing";
+    return (
+      await this.pool.query(
+        `UPDATE settlement_batches SET status=$2,failed_at=CASE WHEN $2='failed' THEN now() ELSE failed_at END,failure_reason=CASE WHEN $3>0 THEN 'One or more items failed submission' ELSE NULL END,updated_at=now() WHERE id=$1 RETURNING *`,
+        [id, status, failed],
+      )
+    ).rows[0];
+  }
+  private async completeBatchItem(c: PoolClient, itemId: string | undefined) {
+    if (!itemId) return;
+    const item = (
+      await c.query(
+        `UPDATE settlement_batch_items SET status='succeeded',updated_at=now() WHERE id=$1 AND status<>'succeeded' RETURNING settlement_batch_id`,
+        [itemId],
+      )
+    ).rows[0];
+    if (!item) return;
+    const counts = (
+      await c.query(
+        `SELECT COUNT(*) FILTER(WHERE status IN('ready','submitted','processing','pending'))::integer pending,COUNT(*) FILTER(WHERE status='failed')::integer failed FROM settlement_batch_items WHERE settlement_batch_id=$1`,
+        [item.settlement_batch_id],
+      )
+    ).rows[0];
+    if (Number(counts.pending) === 0) {
+      const status = Number(counts.failed) > 0 ? "partially_completed" : "completed";
+      await c.query(
+        `UPDATE settlement_batches SET status=$2,completed_at=now(),updated_at=now() WHERE id=$1`,
+        [item.settlement_batch_id, status],
+      );
+      await this.emit(
+        c,
+        status === "completed"
+          ? "settlement.batch.completed"
+          : "settlement.batch.partially_completed",
+        "settlement_batch",
+        item.settlement_batch_id,
+      );
+    }
+  }
+  async collectAutomaticInvoices(userId: string) {
+    await this.admin(userId);
+    await this.pool.query(
+      `UPDATE company_invoices SET status='past_due',updated_at=now() WHERE status IN('issued','partially_paid') AND amount_due_minor_units>0 AND due_date<CURRENT_DATE`,
+    );
+    await this.pool.query(
+      `UPDATE company_billing_accounts b SET billing_status='past_due',past_due_minor_units=x.total,last_failed_payment_at=COALESCE(last_failed_payment_at,now()),updated_at=now() FROM(SELECT billing_account_id,SUM(amount_due_minor_units)::bigint total FROM company_invoices WHERE status='past_due' GROUP BY billing_account_id)x WHERE b.id=x.billing_account_id`,
+    );
+    const rows = await this.pool.query(
+        `SELECT i.id FROM company_invoices i JOIN company_billing_accounts b ON b.id=i.billing_account_id WHERE b.collection_method='automatic' AND b.automatic_collection_enabled AND b.billing_status IN('active','past_due') AND i.status IN('issued','past_due','partially_paid') AND i.amount_due_minor_units>0 AND (i.issue_date+b.automatic_collection_day_offset)::date<=CURRENT_DATE AND NOT EXISTS(SELECT 1 FROM payment_attempts p WHERE p.invoice_id=i.id AND p.status IN('created','submitted','requires_action','processing','authorized','succeeded')) ORDER BY i.due_date NULLS LAST LIMIT 100`,
+      ),
+      results = [];
+    for (const row of rows.rows) {
+      try {
+        results.push(await this.collect(userId, row.id));
+      } catch (e) {
+        results.push({
+          invoiceId: row.id,
+          error: e instanceof Error ? e.message : "COLLECTION_FAILED",
+        });
+      }
+    }
+    return { processed: rows.rowCount ?? 0, results };
+  }
+  async retryDue(userId: string) {
+    await this.admin(userId);
+    if (!this.config.PAYMENT_EXECUTION_ENABLED)
+      throw fail("PAYMENT_EXECUTION_DISABLED", 409);
+    const results: any[] = [];
+    const payments = await this.pool.query(
+      `SELECT p.*,m.provider_payment_method_id FROM payment_attempts p JOIN company_payment_methods m ON m.id=p.payment_method_id WHERE p.status='failed' AND COALESCE(p.next_retry_at,p.failed_at)<=now() AND p.attempt_count<$1 AND NOT EXISTS(SELECT 1 FROM payment_attempts n WHERE n.retry_of_attempt_id=p.id) ORDER BY p.next_retry_at LIMIT 100`,
+      [this.config.COMPANY_PAYMENT_RETRY_LIMIT + 1],
+    );
+    for (const old of payments.rows) {
+      const id = crypto.randomUUID(),
+        key = `${old.idempotency_key}-retry-${Number(old.attempt_count) + 1}`,
+        next = (
+          await this.pool.query(
+            `INSERT INTO payment_attempts(id,attempt_number,provider,provider_environment,attempt_type,status,hiring_company_id,billing_account_id,invoice_id,payment_method_id,currency,amount_minor_units,idempotency_key,provider_customer_id,attempt_count,initiated_at,retry_of_attempt_id)VALUES($1,$2,$3,$4,$5,'created',$6,$7,$8,$9,'USD',$10,$11,$12,$13,now(),$14) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,
+            [
+              id,
+              `PAY-${Date.now()}-${id.slice(0, 8)}`,
+              old.provider,
+              old.provider_environment,
+              old.attempt_type,
+              old.hiring_company_id,
+              old.billing_account_id,
+              old.invoice_id,
+              old.payment_method_id,
+              old.amount_minor_units,
+              key,
+              old.provider_customer_id,
+              Number(old.attempt_count) + 1,
+              old.id,
+            ],
+          )
+        ).rows[0];
+      try {
+        const remote = await this.provider.createInvoiceCollection({
+          customerId: old.provider_customer_id,
+          paymentMethodId: old.provider_payment_method_id,
+          amountMinorUnits: Number(old.amount_minor_units),
+          currency: "USD",
+          idempotencyKey: key,
+        });
+        await this.pool.query(
+          `UPDATE payment_attempts SET status=$2,provider_payment_intent_id=$3,requires_action=$4,updated_at=now() WHERE id=$1`,
+          [
+            next.id,
+            remote.status,
+            remote.providerObjectId,
+            remote.status === "requires_action",
+          ],
+        );
+        results.push({ id: next.id, status: remote.status });
+      } catch (e: any) {
+        await this.pool.query(
+          `UPDATE payment_attempts SET status=$2,failure_code=$3,failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,
+          [
+            next.id,
+            e.outcome === "unknown" ? "unknown" : "failed",
+            e.code ?? "PAYMENT_PROVIDER_ERROR",
+          ],
+        );
+        results.push({
+          id: next.id,
+          status: e.outcome === "unknown" ? "unknown" : "failed",
+        });
+      }
+    }
+    const payouts = await this.pool.query(
+      `SELECT p.*,a.provider_account_id FROM payout_attempts p JOIN payment_provider_connected_accounts a ON a.id=p.connected_account_id WHERE p.status='failed' AND COALESCE(p.next_retry_at,p.failed_at)<=now() AND p.attempt_count<$1 AND a.status='active' AND NOT EXISTS(SELECT 1 FROM payout_attempts n WHERE n.retry_of_attempt_id=p.id) ORDER BY COALESCE(p.next_retry_at,p.failed_at) LIMIT 100`,
+      [this.config.OWNER_PAYOUT_RETRY_LIMIT + 1],
+    );
+    for (const old of payouts.rows) {
+      const id = crypto.randomUUID(),
+        key = `${old.idempotency_key}-retry-${Number(old.attempt_count) + 1}`,
+        next = (
+          await this.pool.query(
+            `INSERT INTO payout_attempts(id,attempt_number,provider,provider_environment,status,robot_owner_organization_id,connected_account_id,statement_id,currency,amount_minor_units,idempotency_key,attempt_count,initiated_at,retry_of_attempt_id)VALUES($1,$2,$3,$4,'created',$5,$6,$7,'USD',$8,$9,$10,now(),$11) ON CONFLICT(provider,provider_environment,idempotency_key) DO UPDATE SET updated_at=now() RETURNING *`,
+            [
+              id,
+              `OUT-${Date.now()}-${id.slice(0, 8)}`,
+              old.provider,
+              old.provider_environment,
+              old.robot_owner_organization_id,
+              old.connected_account_id,
+              old.statement_id,
+              old.amount_minor_units,
+              key,
+              Number(old.attempt_count) + 1,
+              old.id,
+            ],
+          )
+        ).rows[0];
+      try {
+        const remote = await this.provider.createOwnerPayout({
+          accountId: old.provider_account_id,
+          amountMinorUnits: Number(old.amount_minor_units),
+          currency: "USD",
+          idempotencyKey: key,
+        });
+        await this.pool.query(
+          `UPDATE payout_attempts SET status=$2,provider_transfer_id=$3,updated_at=now() WHERE id=$1`,
+          [next.id, remote.status, remote.providerObjectId],
+        );
+        results.push({ id: next.id, status: remote.status });
+      } catch (e: any) {
+        await this.pool.query(
+          `UPDATE payout_attempts SET status=$2,failure_code=$3,failed_at=CASE WHEN $2='failed' THEN now() END,updated_at=now() WHERE id=$1`,
+          [
+            next.id,
+            e.outcome === "unknown" ? "unknown" : "failed",
+            e.code ?? "PAYMENT_PROVIDER_ERROR",
+          ],
+        );
+        results.push({
+          id: next.id,
+          status: e.outcome === "unknown" ? "unknown" : "failed",
+        });
+      }
+    }
+    return { processed: results.length, results };
+  }
+  async reconcilePayments(userId: string) {
+    await this.admin(userId);
+    const run = (
+        await this.pool.query(
+          `INSERT INTO payment_reconciliation_runs(provider,provider_environment,status,started_at)VALUES($1,$2,'running',now()) RETURNING *`,
+          [this.provider.name, this.provider.environment],
+        )
+      ).rows[0],
+      exceptions: any[] = [];
+    let records = 0;
+    const payments = await this.pool.query(
+      `SELECT id,provider_payment_intent_id,status FROM payment_attempts WHERE provider=$1 AND provider_environment=$2 AND provider_payment_intent_id IS NOT NULL AND status IN('submitted','processing','unknown','succeeded') ORDER BY created_at LIMIT 500`,
+      [this.provider.name, this.provider.environment],
+    );
+    for (const row of payments.rows) {
+      records++;
+      try {
+        const remote = await this.provider.retrievePayment({
+          providerPaymentId: row.provider_payment_intent_id,
+        });
+        if (remote.status === "succeeded") {
+          const c = await this.pool.connect();
+          try {
+            await c.query("BEGIN");
+            await this.applyEvent(c, {
+              id: `reconcile-${run.id}-${row.id}`,
+              type: "payment_intent.succeeded",
+              createdAt: new Date(),
+              environment: this.provider.environment,
+              objectId: row.provider_payment_intent_id,
+              status: "succeeded",
+              metadata: { reconciliationRunId: run.id },
+            });
+            await this.emit(
+              c,
+              "payment.reconciliation.repaired",
+              "payment_attempt",
+              row.id,
+              { runId: run.id },
+            );
+            await c.query("COMMIT");
+          } catch (e) {
+            await c.query("ROLLBACK");
+            throw e;
+          } finally {
+            c.release();
+          }
+        } else if (remote.status === "failed")
+          await this.pool.query(
+            `UPDATE payment_attempts SET status='failed',failure_code='RECONCILED_PROVIDER_FAILURE',failed_at=now(),provider_status_at=now(),updated_at=now() WHERE id=$1 AND status<>'settled'`,
+            [row.id],
+          );
+      } catch (e) {
+        exceptions.push({
+          type: "payment_retrieval_failed",
+          resourceType: "payment_attempt",
+          resourceId: row.id,
+          observed: e instanceof Error ? e.message : "unknown",
+        });
+      }
+    }
+    const refunds = await this.pool.query(
+      `SELECT id,provider_refund_id,status FROM payment_refunds WHERE provider=$1 AND provider_environment=$2 AND provider_refund_id IS NOT NULL AND status IN('submitted','processing','unknown') ORDER BY created_at LIMIT 500`,
+      [this.provider.name, this.provider.environment],
+    );
+    for (const row of refunds.rows) {
+      records++;
+      try {
+        const remote = await this.provider.retrieveRefund({
+          providerRefundId: row.provider_refund_id,
+        });
+        if (remote.status === "succeeded") {
+          const c = await this.pool.connect();
+          try {
+            await c.query("BEGIN");
+            await this.applyEvent(c, {
+              id: `reconcile-${run.id}-${row.id}`,
+              type: "refund.updated",
+              createdAt: new Date(),
+              environment: this.provider.environment,
+              objectId: row.provider_refund_id,
+              status: "succeeded",
+              metadata: { reconciliationRunId: run.id },
+            });
+            await c.query("COMMIT");
+          } catch (e) {
+            await c.query("ROLLBACK");
+            throw e;
+          } finally {
+            c.release();
+          }
+        }
+      } catch (e) {
+        exceptions.push({
+          type: "refund_retrieval_failed",
+          resourceType: "payment_refund",
+          resourceId: row.id,
+          observed: e instanceof Error ? e.message : "unknown",
+        });
+      }
+    }
+    const payouts = await this.pool.query(
+      `SELECT id,provider_payout_id,provider_transfer_id,status FROM payout_attempts WHERE provider=$1 AND provider_environment=$2 AND COALESCE(provider_payout_id,provider_transfer_id) IS NOT NULL AND status IN('submitted','processing','unknown','succeeded') ORDER BY created_at LIMIT 500`,
+      [this.provider.name, this.provider.environment],
+    );
+    for (const row of payouts.rows) {
+      records++;
+      try {
+        const objectId = row.provider_payout_id ?? row.provider_transfer_id,
+          remote = await this.provider.retrievePayout({ providerPayoutId: objectId });
+        if (remote.status === "paid") {
+          const c = await this.pool.connect();
+          try {
+            await c.query("BEGIN");
+            await this.applyEvent(c, {
+              id: `reconcile-${run.id}-${row.id}`,
+              type: "payout.paid",
+              createdAt: new Date(),
+              environment: this.provider.environment,
+              objectId,
+              status: "paid",
+              metadata: { reconciliationRunId: run.id },
+            });
+            await this.emit(
+              c,
+              "payment.reconciliation.repaired",
+              "payout_attempt",
+              row.id,
+              { runId: run.id },
+            );
+            await c.query("COMMIT");
+          } catch (e) {
+            await c.query("ROLLBACK");
+            throw e;
+          } finally {
+            c.release();
+          }
+        } else if (remote.status === "failed")
+          await this.pool.query(
+            `UPDATE payout_attempts SET status='failed',failure_code='RECONCILED_PROVIDER_FAILURE',failed_at=now(),provider_status_at=now(),updated_at=now() WHERE id=$1 AND status<>'paid'`,
+            [row.id],
+          );
+      } catch (e) {
+        exceptions.push({
+          type: "payout_retrieval_failed",
+          resourceType: "payout_attempt",
+          resourceId: row.id,
+          observed: e instanceof Error ? e.message : "unknown",
+        });
+      }
+    }
+    const accounts = await this.pool.query(
+      `SELECT id,provider_account_id FROM payment_provider_connected_accounts WHERE provider=$1 AND provider_environment=$2 AND (last_synced_at IS NULL OR last_synced_at<now()-interval '15 minutes') LIMIT 500`,
+      [this.provider.name, this.provider.environment],
+    );
+    for (const row of accounts.rows) {
+      records++;
+      try {
+        const remote = await this.provider.retrieveConnectedAccount({
+            accountId: row.provider_account_id,
+          }),
+          status =
+            remote.payoutsEnabled && remote.transfersEnabled
+              ? "active"
+              : remote.detailsSubmitted
+                ? "pending_verification"
+                : "onboarding";
+        await this.pool.query(
+          `UPDATE payment_provider_connected_accounts SET status=$2,details_submitted=$3,transfers_enabled=$4,payouts_enabled=$5,requirements_currently_due=$6::jsonb,last_synced_at=now(),updated_at=now() WHERE id=$1`,
+          [
+            row.id,
+            status,
+            remote.detailsSubmitted,
+            remote.transfersEnabled,
+            remote.payoutsEnabled,
+            JSON.stringify(remote.requirements),
+          ],
+        );
+      } catch (e) {
+        exceptions.push({
+          type: "connected_account_refresh_failed",
+          resourceType: "payout_account",
+          resourceId: row.id,
+          observed: e instanceof Error ? e.message : "unknown",
+        });
+      }
+    }
+    for (const x of exceptions)
+      await this.pool.query(
+        `INSERT INTO payment_reconciliation_exceptions(reconciliation_run_id,exception_type,severity,resource_type,resource_id,observed_state)VALUES($1,$2,'critical',$3,$4,$5)`,
+        [run.id, x.type, x.resourceType, x.resourceId, x.observed],
+      );
+    return (
+      await this.pool.query(
+        `UPDATE payment_reconciliation_runs SET status=$2,completed_at=now(),record_count=$3,exception_count=$4,summary=$5,updated_at=now() WHERE id=$1 RETURNING *`,
+        [
+          run.id,
+          exceptions.length ? "completed_with_exceptions" : "completed",
+          records,
+          exceptions.length,
+          { repaired: records - exceptions.length },
+        ],
+      )
+    ).rows[0];
+  }
+  async processWebhook(rawBody: Buffer, signature: string) {
+    const event = await this.provider.verifyWebhook({ rawBody, signature });
+    const allowed =
+      event.webhookSource === "connect"
+        ? CONNECT_STRIPE_EVENTS
+        : PLATFORM_STRIPE_EVENTS;
+    if (!allowed.has(event.type))
+      throw fail("PAYMENT_WEBHOOK_EVENT_SOURCE_NOT_ALLOWED", 400);
+    if (event.environment !== this.provider.environment)
+      throw fail("PAYMENT_WEBHOOK_ENVIRONMENT_MISMATCH", 400);
+    const stored = (
+      await this.pool.query(
+        `INSERT INTO payment_processor_events(provider,provider_environment,provider_event_id,event_type,provider_object_id,created_by_provider_at,received_at,processing_status,payload_hash,signature_verified)VALUES($1,$2,$3,$4,$5,$6,now(),'received',$7,true) ON CONFLICT(provider,provider_environment,provider_event_id) DO UPDATE SET received_at=EXCLUDED.received_at RETURNING id,processing_status`,
+        [
+          this.provider.name,
+          this.provider.environment,
+          event.id,
+          event.type,
+          event.objectId,
+          event.createdAt,
+          createHash("sha256").update(rawBody).digest("hex"),
+        ],
+      )
+    ).rows[0];
+    if (isProcessedWebhookDuplicate(stored.processing_status))
+      return { accepted: true, duplicate: true };
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const locked = (
+        await client.query(
+          `SELECT processing_status FROM payment_processor_events WHERE id=$1 FOR UPDATE`,
+          [stored.id],
+        )
+      ).rows[0];
+      if (isProcessedWebhookDuplicate(locked.processing_status)) {
+        await client.query("COMMIT");
+        return { accepted: true, duplicate: true };
+      }
+      await client.query(
+        `UPDATE payment_processor_events SET processing_status='processing',attempt_count=attempt_count+1,updated_at=now() WHERE id=$1`,
+        [stored.id],
+      );
+      await this.applyEvent(client, event);
+      await this.emit(
+        client,
+        "payment.webhook.received",
+        "payment_processor_event",
+        stored.id,
+        { eventType: event.type },
+      );
+      await client.query(
+        `UPDATE payment_processor_events SET processing_status='processed',processed_at=now(),failure_code=NULL,failure_message_safe=NULL,updated_at=now() WHERE id=$1`,
+        [stored.id],
+      );
+      await client.query("COMMIT");
+      return { accepted: true, duplicate: false };
+    } catch (e) {
+      await client.query("ROLLBACK");
+      await this.pool.query(
+        `UPDATE payment_processor_events SET processing_status='failed',failure_code=$2,failure_message_safe='Webhook processing failed; delivery may be retried',updated_at=now() WHERE id=$1`,
+        [
+          stored.id,
+          e instanceof Error
+            ? e.message.slice(0, 120)
+            : "PAYMENT_WEBHOOK_PROCESSING_FAILED",
+        ],
+      );
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+  private async applyEvent(c: PoolClient, e: VerifiedWebhookEvent) {
+    if (e.type.startsWith("identity.verification_session.")) {
+      const status =
+        e.type === "identity.verification_session.verified"
+          ? "verified"
+          : e.type === "identity.verification_session.requires_input"
+            ? "requires_input"
+            : e.type === "identity.verification_session.canceled"
+              ? "cancelled"
+              : e.type === "identity.verification_session.processing"
+                ? "pending"
+                : "pending";
+      await c.query(
+        `UPDATE individual_identity_verifications
+   SET status=$2,last_error_code=CASE WHEN $2='requires_input' THEN NULLIF($3,'') ELSE last_error_code END,
+       verified_at=CASE WHEN $2='verified' THEN COALESCE(verified_at,now()) ELSE verified_at END,
+       updated_at=now()
+   WHERE provider_session_id=$1 AND provider=$4 AND provider_environment=$5`,
+        [e.objectId, status, e.status, this.provider.name, this.provider.environment],
+      );
+      return;
+    }
+    const employerDownpayment = (
+      await c.query(
+        `SELECT d.*,h.organization_id
+   FROM employer_contract_downpayments d
+   JOIN hiring_companies h ON h.id=d.hiring_company_id
+   WHERE d.provider_payment_intent_id=NULLIF($1,'')
+      OR d.provider_payment_intent_id=NULLIF($2,'')
+   FOR UPDATE OF d`,
+        [e.objectId, e.metadata.paymentIntentId ?? ""],
+      )
+    ).rows[0];
+    if (employerDownpayment) {
+      if (
+        isSettledIncomingStripeEvent(e.type) &&
+        employerDownpayment.status !== "settled"
+      ) {
+        const period = (
+          await c.query(
+            `SELECT id FROM financial_periods
+     WHERE status IN ('open','reopened') AND period_start_at<=now() AND period_end_at>now()
+     ORDER BY period_start_at DESC LIMIT 1`,
+          )
+        ).rows[0];
+        if (!period) throw fail("ACTIVE_FINANCIAL_PERIOD_NOT_FOUND", 409);
+        const journal = await this.journal(
+          c,
+          "employer_contract_downpayment",
+          employerDownpayment.id,
+          period.id,
+          employerDownpayment.required_amount_cents,
+          "1020",
+          "2010",
+          "Employer contract downpayment settled",
+          true,
+        );
+        await c.query(
+          `UPDATE employer_contract_downpayments SET status='settled',failure_code=NULL,
+       settled_journal_entry_id=$2,settled_at=COALESCE(settled_at,now()),updated_at=now()
+     WHERE id=$1`,
+          [employerDownpayment.id, journal],
+        );
+        await c.query(
+          `INSERT INTO contract_payment_integrity_states(contract_id,state)
+     VALUES($1,'funded') ON CONFLICT(contract_id) DO UPDATE SET
+      state='funded',failure_code=NULL,resolved_at=now(),updated_at=now()`,
+          [employerDownpayment.contract_id],
+        );
+        await c.query(
+          `INSERT INTO contract_payment_integrity_history(contract_id,from_state,to_state,reason_code)
+     VALUES($1,NULL,'funded','EMPLOYER_DOWNPAYMENT_SETTLED')`,
+          [employerDownpayment.contract_id],
+        );
+        await this.emit(
+          c,
+          "contract.downpayment.settled",
+          "employer_contract_downpayment",
+          employerDownpayment.id,
+          { contractId: employerDownpayment.contract_id },
+        );
+        await this.notify(
+          c,
+          "contract.downpayment.settled",
+          "employer_contract_downpayment",
+          employerDownpayment.id,
+          employerDownpayment.organization_id,
+          "info",
+          {
+            contractId: employerDownpayment.contract_id,
+            amountMinorUnits: Number(employerDownpayment.required_amount_cents),
+            currency: "USD",
+          },
+        );
+      } else if (e.type === "payment_intent.processing") {
+        await c.query(
+          `UPDATE employer_contract_downpayments SET status='processing',updated_at=now()
+     WHERE id=$1 AND status<>'settled'`,
+          [employerDownpayment.id],
+        );
+      } else if (
+        [
+          "payment_intent.payment_failed",
+          "payment_intent.canceled",
+          "charge.failed",
+        ].includes(e.type)
+      ) {
+        const status = e.type === "payment_intent.canceled" ? "cancelled" : "failed";
+        await c.query(
+          `UPDATE employer_contract_downpayments SET status=$2,failure_code=$3,updated_at=now()
+     WHERE id=$1 AND status<>'settled'`,
+          [employerDownpayment.id, status, e.status || e.type],
+        );
+        await this.emit(
+          c,
+          "contract.downpayment.failed",
+          "employer_contract_downpayment",
+          employerDownpayment.id,
+          { contractId: employerDownpayment.contract_id, status },
+        );
+        await this.notify(
+          c,
+          "contract.downpayment.failed",
+          "employer_contract_downpayment",
+          employerDownpayment.id,
+          employerDownpayment.organization_id,
+          "critical",
+          { contractId: employerDownpayment.contract_id, status },
+        );
+      }
+      return;
+    }
+    const fundingRefund = (
+      await c.query(
+        `SELECT r.*,p.stripe_customer_id,p.stripe_payment_intent_id FROM robot_funding_refunds r JOIN robot_funding_payments p ON p.id=r.funding_payment_id WHERE r.stripe_refund_id=$1 FOR UPDATE OF r`,
+        [e.objectId],
+      )
+    ).rows[0];
+    if (
+      fundingRefund &&
+      ["refund.updated", "charge.refund.updated"].includes(e.type) &&
+      e.status !== "failed"
+    ) {
+      await c.query(
+        `UPDATE robot_funding_refunds SET status='SUCCEEDED',settled_at=now(),updated_at=now() WHERE id=$1`,
+        [fundingRefund.id],
+      );
+      await c.query(
+        `UPDATE robot_funding_payments SET refunded_cents=refunded_cents+$2,status=CASE WHEN refunded_cents+$2>=amount_cents THEN 'REFUNDED' ELSE 'PARTIALLY_REFUNDED' END,updated_at=now() WHERE id=$1`,
+        [fundingRefund.funding_payment_id, fundingRefund.amount_cents],
+      );
+      await c.query(
+        `UPDATE downpayment_accounts SET reserved_cents=reserved_cents-$2,refunded_cents=refunded_cents+$2,updated_at=now() WHERE participant_id=$1`,
+        [fundingRefund.user_id, fundingRefund.amount_cents],
+      );
+      await c.query(
+        `INSERT INTO unified_financial_ledger(user_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,stripe_refund_id,idempotency_key,metadata,settled_at) VALUES($1,'REFUND_SETTLED',$2,'CREDIT','SETTLED',$3,$4,$5,$6,$7,now()) ON CONFLICT(idempotency_key) DO NOTHING`,
+        [
+          fundingRefund.user_id,
+          fundingRefund.amount_cents,
+          fundingRefund.stripe_customer_id,
+          fundingRefund.stripe_payment_intent_id,
+          e.objectId,
+          `refund-settled:${fundingRefund.id}`,
+          JSON.stringify({ fundingRefundId: fundingRefund.id }),
+        ],
+      );
+      await c.query(
+        `INSERT INTO notifications(user_id,channel,title,body,status,idempotency_key,notification_type,priority,is_required_transactional) VALUES($1,'in_app','Refund succeeded','Stripe confirmed your robot-funding refund.','pending',$2,'REFUND_SUCCEEDED','high',true) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+        [fundingRefund.user_id, `refund-success:${fundingRefund.id}`],
+      );
+      return;
+    }
+    if (fundingRefund && e.type === "refund.failed") {
+      await c.query(
+        `UPDATE robot_funding_refunds SET status='FAILED',failure_code=$2,failed_at=now(),updated_at=now() WHERE id=$1`,
+        [fundingRefund.id, e.status],
+      );
+      await c.query(
+        `UPDATE downpayment_accounts SET reserved_cents=reserved_cents-$2,available_cents=available_cents+$2,updated_at=now() WHERE participant_id=$1`,
+        [fundingRefund.user_id, fundingRefund.amount_cents],
+      );
+      return;
+    }
+    const disputedFunding = (
+      await c.query(
+        `SELECT * FROM robot_funding_payments WHERE stripe_payment_intent_id=NULLIF($1,'') OR stripe_charge_id=NULLIF($2,'') FOR UPDATE`,
+        [e.metadata.paymentIntentId ?? "", e.metadata.chargeId ?? e.objectId],
+      )
+    ).rows[0];
+    if (
+      disputedFunding &&
+      [
+        "charge.dispute.created",
+        "charge.dispute.updated",
+        "charge.dispute.closed",
+      ].includes(e.type)
+    ) {
+      const outcome =
+        e.type === "charge.dispute.created"
+          ? "DISPUTE_OPENED"
+          : e.status === "won"
+            ? "DISPUTE_WON"
+            : e.status === "lost"
+              ? "DISPUTE_LOST"
+              : "FUNDS_WITHDRAWN";
+      const dispute = (
+        await c.query(
+          `INSERT INTO robot_funding_disputes(funding_payment_id,user_id,allocation_id,stripe_dispute_id,status,amount_cents,reason) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(stripe_dispute_id) DO UPDATE SET status=EXCLUDED.status,reason=EXCLUDED.reason,updated_at=now(),resolved_at=CASE WHEN EXCLUDED.status IN('DISPUTE_WON','DISPUTE_LOST') THEN now() ELSE robot_funding_disputes.resolved_at END RETURNING *`,
+          [
+            disputedFunding.id,
+            disputedFunding.user_id,
+            disputedFunding.allocation_id,
+            e.objectId,
+            outcome,
+            e.amountMinorUnits ?? disputedFunding.amount_cents,
+            e.metadata.reason ?? null,
+          ],
+        )
+      ).rows[0];
+      await c.query(
+        `UPDATE robot_funding_payments SET status=CASE WHEN $2='DISPUTE_LOST' THEN 'CHARGEBACK' ELSE 'DISPUTED' END,updated_at=now() WHERE id=$1`,
+        [disputedFunding.id, outcome],
+      );
+      if (disputedFunding.allocation_id) {
+        await c.query(
+          `UPDATE direct_ownership_allocations SET financial_review_required=true,updated_at=now() WHERE id=$1`,
+          [disputedFunding.allocation_id],
+        );
+        await c.query(
+          `UPDATE fractional_robot_ownership SET financial_review_required=true WHERE source_allocation_id=$1`,
+          [disputedFunding.allocation_id],
+        );
+      }
+      await c.query(
+        `INSERT INTO unified_financial_ledger(user_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_payment_intent_id,stripe_dispute_id,idempotency_key,metadata) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(idempotency_key) DO NOTHING`,
+        [
+          disputedFunding.user_id,
+          disputedFunding.allocation_id,
+          outcome === "DISPUTE_WON" ? "DISPUTE_CREDIT" : "DISPUTE_DEBIT",
+          dispute.amount_cents,
+          outcome === "DISPUTE_WON" ? "CREDIT" : "DEBIT",
+          outcome,
+          disputedFunding.stripe_payment_intent_id,
+          e.objectId,
+          `dispute:${e.id}`,
+          JSON.stringify({ ownershipReviewRequired: true }),
+        ],
+      );
+      await c.query(
+        `INSERT INTO notifications(user_id,channel,title,body,status,idempotency_key,notification_type,priority,is_required_transactional) VALUES($1,'in_app','Payment dispute opened','A Stripe dispute requires financial review. Ownership is not silently removed.','pending',$2,'DISPUTE_OPENED','high',true) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+        [disputedFunding.user_id, `dispute:${e.objectId}`],
+      );
+      return;
+    }
+    const funding = (
+      await c.query(
+        `SELECT * FROM robot_funding_payments WHERE stripe_payment_intent_id=$1 FOR UPDATE`,
+        [e.objectId],
+      )
+    ).rows[0];
+    if (funding) {
+      if (isSettledIncomingStripeEvent(e.type) && funding.status !== "SUCCEEDED") {
+        await c.query(
+          `UPDATE robot_funding_payments SET status='SUCCEEDED',stripe_charge_id=COALESCE(NULLIF($2,''),stripe_charge_id),settled_at=now(),updated_at=now() WHERE id=$1`,
+          [funding.id, e.metadata.chargeId ?? ""],
+        );
+        await c.query(
+          `INSERT INTO unified_financial_ledger(user_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,stripe_charge_id,idempotency_key,metadata,settled_at) VALUES($1,$2,'EXTERNAL_PAYMENT_SETTLED',$3,'DEBIT','SETTLED',$4,$5,$6,$7,$8,now()) ON CONFLICT(idempotency_key) DO NOTHING`,
+          [
+            funding.user_id,
+            funding.allocation_id,
+            funding.amount_cents,
+            funding.stripe_customer_id,
+            e.objectId,
+            e.metadata.chargeId ?? null,
+            `settled:${funding.id}`,
+            JSON.stringify({ fundingPaymentId: funding.id, purpose: funding.purpose }),
+          ],
+        );
+        if (funding.purpose === "DOWNPAYMENT") {
+          await c.query(
+            `INSERT INTO downpayment_accounts(participant_id,contributed_cents,available_cents) VALUES($1,$2,$2) ON CONFLICT(participant_id) DO UPDATE SET contributed_cents=downpayment_accounts.contributed_cents+$2,available_cents=downpayment_accounts.available_cents+$2,updated_at=now()`,
+            [funding.user_id, funding.amount_cents],
+          );
+          await c.query(
+            `INSERT INTO downpayment_queue_entries(participant_id,status) SELECT $1,'available' WHERE NOT EXISTS(SELECT 1 FROM downpayment_queue_entries WHERE participant_id=$1 AND closed_at IS NULL)`,
+            [funding.user_id],
+          );
+          await c.query(
+            `INSERT INTO unified_financial_ledger(user_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,idempotency_key,metadata,settled_at) VALUES($1,'DOWNPAYMENT_FUNDED',$2,'CREDIT','SETTLED',$3,$4,$5,$6,now()) ON CONFLICT(idempotency_key) DO NOTHING`,
+            [
+              funding.user_id,
+              funding.amount_cents,
+              funding.stripe_customer_id,
+              e.objectId,
+              `downpayment-funded:${funding.id}`,
+              JSON.stringify({ fundingPaymentId: funding.id }),
+            ],
+          );
+        } else if (funding.purpose === "DIRECT_OWNERSHIP") {
+          const a = (
+            await c.query(
+              `UPDATE direct_ownership_allocations SET paid_amount_cents=paid_amount_cents+$2,status=CASE WHEN paid_amount_cents+$2>=allocated_microunits*locked_unit_price_cents/1000000 THEN 'PAID' ELSE 'PAYMENT_PROCESSING' END,version=version+1,updated_at=now() WHERE id=$1 AND status IN('PAYMENT_WINDOW_OPEN','PAYMENT_PROCESSING') AND payment_due_at>now() RETURNING *`,
+              [funding.allocation_id, funding.amount_cents],
+            )
+          ).rows[0];
+          if (!a) throw fail("ALLOCATION_PAYMENT_WINDOW_CLOSED", 409);
+          if (a.status === "PAID") {
+            await c.query(
+              `INSERT INTO fractional_robot_ownership(participant_id,contract_id,ownership_microunits,applied_amount_cents,source_allocation_id) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`,
+              [
+                funding.user_id,
+                a.contract_id,
+                a.allocated_microunits,
+                a.paid_amount_cents,
+                a.id,
+              ],
+            );
+            await c.query(
+              `UPDATE allocation_reminder_deliveries SET status='CANCELLED' WHERE allocation_id=$1 AND status='PENDING'`,
+              [a.id],
+            );
+            await c.query(
+              `INSERT INTO unified_financial_ledger(user_id,contract_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,idempotency_key,settled_at) VALUES($1,$2,$3,'OWNERSHIP_PURCHASE',$4,'CREDIT','SETTLED',$5,$6,$7,now()) ON CONFLICT(idempotency_key) DO NOTHING`,
+              [
+                funding.user_id,
+                a.contract_id,
+                a.id,
+                a.paid_amount_cents,
+                funding.stripe_customer_id,
+                e.objectId,
+                `ownership:${a.id}`,
+              ],
+            );
+          }
+        }
+        await c.query(
+          `INSERT INTO notifications(user_id,channel,title,body,status,idempotency_key,notification_type,priority,is_required_transactional) VALUES($1,'in_app',$2,$3,'pending',$4,$5,'high',true) ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+          [
+            funding.user_id,
+            funding.purpose === "DOWNPAYMENT"
+              ? "Down payment funded"
+              : "Ownership payment succeeded",
+            "Stripe confirmed settlement and the RoboWorkPool ledger was updated.",
+            `funding-success:${funding.id}`,
+            funding.purpose === "DOWNPAYMENT"
+              ? "DOWNPAYMENT_FUNDED"
+              : "OWNERSHIP_PAYMENT_SUCCEEDED",
+          ],
+        );
+      } else if (
+        ["payment_intent.payment_failed", "payment_intent.canceled"].includes(e.type)
+      ) {
+        await c.query(
+          `UPDATE robot_funding_payments SET status=CASE WHEN $2='payment_intent.canceled' THEN 'CANCELLED' ELSE 'FAILED' END,failure_code=$2,failed_at=now(),updated_at=now() WHERE id=$1`,
+          [funding.id, e.type],
+        );
+        await c.query(
+          `INSERT INTO unified_financial_ledger(user_id,allocation_id,transaction_type,amount_cents,direction,status,stripe_customer_id,stripe_payment_intent_id,idempotency_key,metadata) VALUES($1,$2,'EXTERNAL_PAYMENT_FAILED',$3,'DEBIT','FAILED',$4,$5,$6,$7) ON CONFLICT(idempotency_key) DO NOTHING`,
+          [
+            funding.user_id,
+            funding.allocation_id,
+            funding.amount_cents,
+            funding.stripe_customer_id,
+            e.objectId,
+            `failed:${funding.id}`,
+            JSON.stringify({ eventType: e.type }),
+          ],
+        );
+      } else if (e.type === "payment_intent.processing")
+        await c.query(
+          `UPDATE robot_funding_payments SET status='PROCESSING',updated_at=now() WHERE id=$1`,
+          [funding.id],
+        );
+      return;
+    }
+    if (isSettledIncomingStripeEvent(e.type)) {
+      const a = (
+        await c.query(
+          `SELECT * FROM payment_attempts WHERE provider_payment_intent_id=$1 OR provider_charge_id=$1 FOR UPDATE`,
+          [e.objectId],
+        )
+      ).rows[0];
+      if (a && a.status !== "settled") {
+        const journal = await this.journal(
+          c,
+          "processor_collection",
+          a.id,
+          a.invoice_id,
+          a.amount_minor_units,
+          "1020",
+          "1000",
+          "Processor collection settled",
+        );
+        await c.query(
+          `UPDATE payment_attempts SET status='settled',succeeded_at=COALESCE(succeeded_at,now()),settled_at=now(),settlement_journal_entry_id=$2,updated_at=now() WHERE id=$1`,
+          [a.id, journal],
+        );
+        if ((e.feeMinorUnits ?? 0) > 0)
+          await this.journal(
+            c,
+            "processor_fee",
+            a.id,
+            a.invoice_id,
+            String(e.feeMinorUnits),
+            "5020",
+            "1020",
+            "Processor fee",
+          );
+        await this.completeBatchItem(c, a.settlement_batch_item_id);
+        await c.query(
+          `UPDATE company_billing_accounts SET last_successful_payment_at=now(),last_failed_payment_at=NULL,updated_at=now() WHERE id=$1`,
+          [a.billing_account_id],
+        );
+        await c.query(
+          `UPDATE company_invoices SET amount_paid_minor_units=LEAST(total_minor_units,amount_paid_minor_units+$2),amount_due_minor_units=GREATEST(0,amount_due_minor_units-$2),status=CASE WHEN amount_due_minor_units<=$2 THEN 'paid' ELSE 'partially_paid' END,updated_at=now() WHERE id=$1`,
+          [a.invoice_id, a.amount_minor_units],
+        );
+        const company = (
+          await c.query(`SELECT organization_id FROM hiring_companies WHERE id=$1`, [
+            a.hiring_company_id,
+          ])
+        ).rows[0];
+        await this.emit(c, "payment.collection.settled", "payment_attempt", a.id, {
+          invoiceId: a.invoice_id,
+        });
+        await this.notify(
+          c,
+          "payment.succeeded",
+          "payment_attempt",
+          a.id,
+          company?.organization_id ?? null,
+          "info",
+          { amountMinorUnits: Number(a.amount_minor_units), currency: "USD" },
+        );
+        await this.transitionPaymentIntegrity(
+          c,
+          a.id,
+          a.invoice_id,
+          "resolved_reactivated",
+          "PAYMENT_SETTLED",
+        );
+      }
+    } else if (["payment_intent.payment_failed", "charge.failed"].includes(e.type)) {
+      const failed = await c.query(
+        `UPDATE payment_attempts SET status='failed',failure_code=$2,
+    failure_message_safe='Payment failed',failed_at=now(),updated_at=now()
+    WHERE status<>'settled' AND (provider_payment_intent_id=$1 OR provider_charge_id=$1)
+    RETURNING id,invoice_id`,
+        [e.objectId, e.status],
+      );
+      for (const attempt of failed.rows)
+        await this.transitionPaymentIntegrity(
+          c,
+          attempt.id,
+          attempt.invoice_id,
+          "work_authorization_suspended",
+          e.status || e.type,
+        );
+    } else if (["payout.paid"].includes(e.type)) {
+      const m = (
+        await c.query(
+          `SELECT t.*,p.purchase_order_id FROM manufacturer_transfers t JOIN manufacturer_payables p ON p.id=t.payable_id WHERE t.stripe_transfer_id=$1 FOR UPDATE OF t`,
+          [e.objectId],
+        )
+      ).rows[0];
+      if (m && m.status !== "PAID") {
+        await c.query(
+          `UPDATE manufacturer_transfers SET status='PAID',paid_at=now(),updated_at=now() WHERE id=$1`,
+          [m.id],
+        );
+        await c.query(
+          `UPDATE manufacturer_payables SET status='PAID',updated_at=now() WHERE id=$1`,
+          [m.payable_id],
+        );
+        await c.query(
+          `INSERT INTO unified_financial_ledger(purchase_order_id,transaction_type,amount_cents,direction,status,stripe_connected_account_id,stripe_transfer_id,idempotency_key,metadata,settled_at) VALUES($1,'MANUFACTURER_TRANSFER',$2,'DEBIT','SETTLED',$3,$4,$5,$6,now()) ON CONFLICT(idempotency_key) DO NOTHING`,
+          [
+            m.purchase_order_id,
+            m.amount_cents,
+            m.stripe_connected_account_id,
+            e.objectId,
+            `manufacturer-transfer:${m.id}`,
+            JSON.stringify({
+              manufacturerId: m.manufacturer_id,
+              payableId: m.payable_id,
+            }),
+          ],
+        );
+        await this.emit(
+          c,
+          "manufacturer.transfer.paid",
+          "manufacturer_transfer",
+          m.id,
+          { payableId: m.payable_id },
+        );
+      }
+      const a = (
+        await c.query(
+          `SELECT * FROM payout_attempts WHERE provider_payout_id=$1 OR provider_transfer_id=$1 FOR UPDATE`,
+          [e.objectId],
+        )
+      ).rows[0];
+      if (a && a.status !== "paid") {
+        const statement = (
+          await c.query(
+            `SELECT financial_period_id FROM robot_owner_earnings_statements WHERE id=$1`,
+            [a.statement_id],
+          )
+        ).rows[0];
+        const journal = await this.journal(
+          c,
+          "owner_payout",
+          a.id,
+          statement.financial_period_id,
+          a.amount_minor_units,
+          "2000",
+          "1020",
+          "Owner payout settled",
+          true,
+        );
+        await c.query(
+          `UPDATE payout_attempts SET status='paid',paid_at=now(),settlement_journal_entry_id=$2,updated_at=now() WHERE id=$1`,
+          [a.id, journal],
+        );
+        await this.completeBatchItem(c, a.settlement_batch_item_id);
+        await c.query(
+          `UPDATE robot_owner_earnings_statements SET paid_minor_units=paid_minor_units+$2,updated_at=now() WHERE id=$1`,
+          [a.statement_id, a.amount_minor_units],
+        );
+        await this.emit(c, "payout.paid", "payout_attempt", a.id, {
+          statementId: a.statement_id,
+        });
+        await this.notify(
+          c,
+          "payout.paid",
+          "payout_attempt",
+          a.id,
+          a.robot_owner_organization_id,
+          "info",
+          { amountMinorUnits: Number(a.amount_minor_units), currency: "USD" },
+        );
+      }
+    } else if (["refund.updated", "charge.refunded"].includes(e.type)) {
+      const r = (
+        await c.query(
+          `SELECT r.*,p.hiring_company_id,h.organization_id FROM payment_refunds r JOIN payment_attempts p ON p.id=r.payment_attempt_id JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE r.provider_refund_id=$1 FOR UPDATE`,
+          [e.objectId],
+        )
+      ).rows[0];
+      if (r && r.status !== "succeeded") {
+        const journal = await this.journal(
+          c,
+          "company_refund",
+          r.id,
+          r.invoice_id,
+          r.amount_minor_units,
+          "1000",
+          "1020",
+          "Company refund settled",
+        );
+        await c.query(
+          `UPDATE payment_refunds SET status='succeeded',succeeded_at=now(),provider_status_at=$2,settlement_journal_entry_id=$3,updated_at=now() WHERE id=$1`,
+          [r.id, e.createdAt, journal],
+        );
+        await c.query(
+          `UPDATE company_invoices SET amount_paid_minor_units=GREATEST(0,amount_paid_minor_units-$2),amount_due_minor_units=LEAST(total_minor_units,amount_due_minor_units+$2),status=CASE WHEN amount_due_minor_units+$2>=total_minor_units THEN 'issued' ELSE 'partially_paid' END,updated_at=now() WHERE id=$1`,
+          [r.invoice_id, r.amount_minor_units],
+        );
+        const totals = (
+          await c.query(
+            `SELECT COALESCE(SUM(amount_minor_units),0)::bigint total FROM payment_refunds WHERE payment_attempt_id=$1 AND status='succeeded'`,
+            [r.payment_attempt_id],
+          )
+        ).rows[0];
+        await c.query(
+          `UPDATE payment_attempts SET status=CASE WHEN $2>=amount_minor_units THEN 'refunded' ELSE 'partially_refunded' END,updated_at=now() WHERE id=$1`,
+          [r.payment_attempt_id, totals.total],
+        );
+        await this.emit(c, "refund.succeeded", "payment_refund", r.id, {
+          paymentAttemptId: r.payment_attempt_id,
+        });
+        await this.notify(
+          c,
+          "refund.completed",
+          "payment_refund",
+          r.id,
+          r.organization_id,
+          "info",
+          { amountMinorUnits: Number(r.amount_minor_units), currency: "USD" },
+        );
+      }
+    } else if (["refund.failed"].includes(e.type))
+      await c.query(
+        `UPDATE payment_refunds SET status='failed',failure_code=$2,failure_message_safe='Refund failed',failed_at=now(),provider_status_at=$3,updated_at=now() WHERE provider_refund_id=$1 AND status<>'succeeded'`,
+        [e.objectId, e.status, e.createdAt],
+      );
+    else if (["charge.dispute.created", "charge.dispute.updated"].includes(e.type)) {
+      const payment = (
+          await c.query(
+            `SELECT p.*,h.organization_id FROM payment_attempts p JOIN hiring_companies h ON h.id=p.hiring_company_id WHERE p.provider_payment_intent_id=NULLIF($1,'') OR p.provider_charge_id=NULLIF($2,'') FOR UPDATE`,
+            [e.metadata.paymentIntentId ?? "", e.metadata.chargeId ?? ""],
+          )
+        ).rows[0],
+        dispute = (
+          await c.query(
+            `INSERT INTO processor_disputes(provider,provider_environment,provider_dispute_id,payment_attempt_id,invoice_id,status,amount_minor_units,currency,reason,evidence_due_at,created_by_provider_at)VALUES($1,$2,$3,$4,$5,$6,$7,'USD',$8,NULL,$9) ON CONFLICT(provider,provider_environment,provider_dispute_id) DO UPDATE SET status=EXCLUDED.status,reason=EXCLUDED.reason,updated_at=now() RETURNING *`,
+            [
+              this.provider.name,
+              this.provider.environment,
+              e.objectId,
+              payment?.id ?? null,
+              payment?.invoice_id ?? null,
+              e.status,
+              e.amountMinorUnits ?? payment?.amount_minor_units ?? 0,
+              e.metadata.reason ?? null,
+              e.createdAt,
+            ],
+          )
+        ).rows[0];
+      if (payment) {
+        await c.query(
+          `UPDATE payment_attempts SET status='disputed',updated_at=now() WHERE id=$1`,
+          [payment.id],
+        );
+        if (!dispute.suspense_journal_entry_id) {
+          const journal = await this.journal(
+            c,
+            "processor_chargeback",
+            dispute.id,
+            payment.invoice_id,
+            String(dispute.amount_minor_units),
+            "2040",
+            "1020",
+            "Processor chargeback moved to suspense",
+          );
+          await c.query(
+            `UPDATE processor_disputes SET suspense_journal_entry_id=$2 WHERE id=$1`,
+            [dispute.id, journal],
+          );
+        }
+        await this.notify(
+          c,
+          "processor.dispute.opened",
+          "processor_dispute",
+          dispute.id,
+          payment.organization_id,
+          "critical",
+          { amountMinorUnits: Number(dispute.amount_minor_units), currency: "USD" },
+        );
+      }
+      await this.emit(c, "processor.dispute.updated", "processor_dispute", dispute.id, {
+        status: e.status,
+      });
+    } else if (["transfer.created", "transfer.updated"].includes(e.type)) {
+      await c.query(
+        `UPDATE payout_attempts SET status='processing',updated_at=now() WHERE provider_transfer_id=$1 AND status NOT IN('paid','reversed')`,
+        [e.objectId],
+      );
+      await c.query(
+        `UPDATE manufacturer_transfers SET status='PROCESSING',updated_at=now() WHERE stripe_transfer_id=$1 AND status NOT IN('PAID','REVERSED')`,
+        [e.objectId],
+      );
+    } else if (["payout.created", "payout.updated"].includes(e.type))
+      await c.query(
+        `UPDATE payout_attempts SET status='processing',updated_at=now() WHERE provider_payout_id=$1 AND status NOT IN('paid','reversed')`,
+        [e.objectId],
+      );
+    else if (
+      [
+        "account.external_account.created",
+        "account.external_account.updated",
+        "account.external_account.deleted",
+      ].includes(e.type)
+    ) {
+      const linked = e.type !== "account.external_account.deleted";
+      await c.query(
+        `UPDATE payment_provider_connected_accounts SET bank_account_linked=$2,last_synced_at=now(),updated_at=now() WHERE provider_account_id=$1`,
+        [e.metadata.connectedAccountId, linked],
+      );
+      await c.query(
+        `UPDATE user_financial_profiles SET bank_account_linked=$2,updated_at=now() WHERE stripe_connected_account_id=$1`,
+        [e.metadata.connectedAccountId, linked],
+      );
+      await c.query(
+        `UPDATE manufacturer_financial_profiles SET bank_account_linked=$2,updated_at=now() WHERE stripe_connected_account_id=$1`,
+        [e.metadata.connectedAccountId, linked],
+      );
+    } else if (e.type === "account.updated") {
+      const requirements = JSON.parse(e.metadata.requirements ?? "[]") as string[],
+        active =
+          e.metadata.transfersEnabled === "true" &&
+          e.metadata.payoutsEnabled === "true",
+        status = active
+          ? "active"
+          : e.metadata.detailsSubmitted === "true"
+            ? "pending_verification"
+            : "onboarding";
+      const account = (
+        await c.query(
+          `UPDATE payment_provider_connected_accounts SET status=$2,details_submitted=$3,transfers_enabled=$4,payouts_enabled=$5,requirements_currently_due=$6::jsonb,last_synced_at=now(),updated_at=now() WHERE provider_account_id=$1 RETURNING *`,
+          [
+            e.objectId,
+            status,
+            e.metadata.detailsSubmitted === "true",
+            e.metadata.transfersEnabled === "true",
+            e.metadata.payoutsEnabled === "true",
+            JSON.stringify(requirements),
+          ],
+        )
+      ).rows[0];
+      if (account) {
+        await this.emit(
+          c,
+          active ? "payout.account.enabled" : "payout.account.verification_pending",
+          "payout_account",
+          account.id,
+          { status },
+        );
+        await this.notify(
+          c,
+          active ? "payout.account.enabled" : "payout.account.verification_required",
+          "payout_account",
+          account.id,
+          account.robot_owner_organization_id,
+          active ? "info" : "warning",
+          { status },
+        );
+      }
+    } else if (["payout.failed", "transfer.reversed"].includes(e.type))
+      await c.query(
+        `UPDATE payout_attempts SET status=CASE WHEN $2='transfer.reversed' THEN 'reversed' ELSE 'failed' END,failure_code=$3,failure_message_safe='Payout failed',failed_at=now(),updated_at=now() WHERE status<>'paid' AND (provider_payout_id=$1 OR provider_transfer_id=$1)`,
+        [e.objectId, e.type, e.status],
+      );
+    await c.query(
+      `UPDATE manufacturer_transfers SET status=CASE WHEN $2='transfer.reversed' THEN 'REVERSED' ELSE 'FAILED' END,failure_code=$3,updated_at=now() WHERE stripe_transfer_id=$1 AND status<>'PAID'`,
+      [e.objectId, e.type, e.status],
+    );
+    await c.query(
+      `UPDATE manufacturer_payables p SET status='FAILED',updated_at=now() FROM manufacturer_transfers t WHERE t.payable_id=p.id AND t.stripe_transfer_id=$1 AND p.status<>'PAID'`,
+      [e.objectId],
+    );
+  }
+  private async transitionPaymentIntegrity(
+    c: PoolClient,
+    paymentAttemptId: string,
+    invoiceId: string,
+    state: "work_authorization_suspended" | "resolved_reactivated",
+    reason: string,
+  ) {
+    const contracts = await c.query(
+      `SELECT DISTINCT l.contract_id,h.organization_id
+    FROM company_invoice_line_items l JOIN company_invoices i ON i.id=l.invoice_id
+    JOIN hiring_companies h ON h.id=i.hiring_company_id
+    WHERE l.invoice_id=$1 AND l.contract_id IS NOT NULL`,
+      [invoiceId],
+    );
+    for (const row of contracts.rows) {
+      const prior = (
+        await c.query(
+          `SELECT state FROM contract_payment_integrity_states WHERE contract_id=$1 FOR UPDATE`,
+          [row.contract_id],
+        )
+      ).rows[0];
+      if (prior?.state === state) continue;
+      await c.query(
+        `INSERT INTO contract_payment_integrity_states(contract_id,state,last_payment_attempt_id,
+      failure_code,failed_at,suspended_at,resolved_at)
+     VALUES($1,$2,$3,$4,CASE WHEN $2='work_authorization_suspended' THEN now() END,
+      CASE WHEN $2='work_authorization_suspended' THEN now() END,
+      CASE WHEN $2='resolved_reactivated' THEN now() END)
+     ON CONFLICT(contract_id) DO UPDATE SET state=EXCLUDED.state,
+      last_payment_attempt_id=EXCLUDED.last_payment_attempt_id,
+      failure_code=CASE WHEN EXCLUDED.state='resolved_reactivated' THEN NULL ELSE EXCLUDED.failure_code END,
+      failed_at=COALESCE(EXCLUDED.failed_at,contract_payment_integrity_states.failed_at),
+      suspended_at=COALESCE(EXCLUDED.suspended_at,contract_payment_integrity_states.suspended_at),
+      resolved_at=COALESCE(EXCLUDED.resolved_at,contract_payment_integrity_states.resolved_at),updated_at=now()`,
+        [row.contract_id, state, paymentAttemptId, reason],
+      );
+      await c.query(
+        `INSERT INTO contract_payment_integrity_history(contract_id,from_state,to_state,reason_code,
+      payment_attempt_id) VALUES($1,$2,$3,$4,$5)`,
+        [row.contract_id, prior?.state ?? null, state, reason, paymentAttemptId],
+      );
+      await this.emit(
+        c,
+        `contract.payment_integrity.${state}`,
+        "contract",
+        row.contract_id,
+        { paymentAttemptId, reason },
+      );
+      await this.notify(
+        c,
+        `contract.payment_integrity.${state}`,
+        "contract",
+        row.contract_id,
+        row.organization_id,
+        state === "work_authorization_suspended" ? "critical" : "info",
+        { paymentAttemptId, reason },
+      );
+      await c.query(
+        `INSERT INTO notifications(user_id,organization_id,channel,title,body,href,status,
+      idempotency_key,notification_type,priority,is_required_transactional)
+     SELECT DISTINCT om.user_id,om.organization_id,'in_app',$2,$3,$4,'pending',$5,$6,$7,true
+     FROM robot_assignments a JOIN organization_memberships om
+       ON om.organization_id=a.robot_owner_organization_id AND om.status='active'
+     WHERE a.contract_id=$1
+     ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
+        [
+          row.contract_id,
+          state === "work_authorization_suspended"
+            ? "Work authorization suspended"
+            : "Work authorization restored",
+          state === "work_authorization_suspended"
+            ? "New RoboWorkPool billable work is suspended while the employer resolves payment."
+            : "The employer resolved payment and RoboWorkPool work authorization is restored.",
+          `/owner/contracts/${row.contract_id}`,
+          `integrity:${state}:${row.contract_id}`,
+          `CONTRACT_${state.toUpperCase()}`,
+          state === "work_authorization_suspended" ? "high" : "normal",
+        ],
+      );
+    }
+  }
+  private async journal(
+    c: PoolClient,
+    type: string,
+    sourceId: string,
+    referenceId: string,
+    amount: string,
+    debitCode: string,
+    creditCode: string,
+    description: string,
+    referenceIsPeriod = false,
+  ) {
+    const period = referenceIsPeriod
+        ? { id: referenceId }
+        : (
+            await c.query(
+              `SELECT financial_period_id id FROM company_invoices WHERE id=$1`,
+              [referenceId],
+            )
+          ).rows[0],
+      id = crypto.randomUUID(),
+      accounts = await c.query(
+        `SELECT id,account_code FROM financial_accounts WHERE account_code=ANY($1::text[])`,
+        [[debitCode, creditCode]],
+      ),
+      map = new Map(accounts.rows.map((r) => [r.account_code, r.id]));
+    await c.query(
+      `INSERT INTO journal_entries(id,journal_number,entry_type,status,effective_at,financial_period_id,source_type,source_id,description,currency,correlation_id)VALUES($1,$2,$3,'draft',now(),$4,$3,$5,$6,'USD',$7)`,
+      [
+        id,
+        `RWP-JRN-${Date.now()}-${id.slice(0, 8)}`,
+        type,
+        period.id,
+        sourceId,
+        description,
+        crypto.randomUUID(),
+      ],
+    );
+    await c.query(
+      `INSERT INTO journal_lines(journal_entry_id,financial_account_id,line_number,debit_minor_units,credit_minor_units,description)VALUES($1,$2,1,$4,0,$6),($1,$3,2,0,$4,$6)`,
+      [id, map.get(debitCode), map.get(creditCode), amount, 0, description],
+    );
+    await c.query(`UPDATE journal_entries SET status='posted' WHERE id=$1`, [id]);
+    return id;
+  }
+  async metrics(userId: string) {
+    await this.admin(userId);
+    const [payments, payouts, refunds, webhooks, disputes, exceptions, clearing] =
+      await Promise.all([
+        this.pool.query(
+          `SELECT status,COUNT(*)::integer count FROM payment_attempts GROUP BY status`,
+        ),
+        this.pool.query(
+          `SELECT status,COUNT(*)::integer count FROM payout_attempts GROUP BY status`,
+        ),
+        this.pool.query(
+          `SELECT status,COUNT(*)::integer count FROM payment_refunds GROUP BY status`,
+        ),
+        this.pool.query(
+          `SELECT processing_status status,COUNT(*)::integer count FROM payment_processor_events GROUP BY processing_status`,
+        ),
+        this.pool.query(
+          `SELECT COUNT(*)::integer count FROM processor_disputes WHERE status NOT IN('won','lost','closed')`,
+        ),
+        this.pool.query(
+          `SELECT COUNT(*)::integer count FROM payment_reconciliation_exceptions WHERE status='open'`,
+        ),
+        this.pool.query(
+          `SELECT COALESCE(SUM(l.debit_minor_units-l.credit_minor_units),0)::bigint balance FROM journal_lines l JOIN financial_accounts a ON a.id=l.financial_account_id JOIN journal_entries e ON e.id=l.journal_entry_id WHERE a.account_code='1020' AND e.status='posted'`,
+        ),
+      ]);
+    const lines = [
+      "# TYPE rwp_payment_attempts_total counter",
+      ...payments.rows.map(
+        (r) => `rwp_payment_attempts_total{status="${r.status}"} ${r.count}`,
+      ),
+      "# TYPE rwp_payout_attempts_total counter",
+      ...payouts.rows.map(
+        (r) => `rwp_payout_attempts_total{status="${r.status}"} ${r.count}`,
+      ),
+      "# TYPE rwp_refunds_total counter",
+      ...refunds.rows.map((r) => `rwp_refunds_total{status="${r.status}"} ${r.count}`),
+      "# TYPE rwp_payment_webhooks_total counter",
+      ...webhooks.rows.map(
+        (r) => `rwp_payment_webhooks_total{status="${r.status}"} ${r.count}`,
+      ),
+      `rwp_processor_disputes_open ${disputes.rows[0].count}`,
+      `rwp_payment_reconciliation_exceptions_open ${exceptions.rows[0].count}`,
+      `rwp_processor_clearing_minor_units ${clearing.rows[0].balance}`,
+    ];
+    return lines.join("\n") + "\n";
+  }
+  async platform(userId: string, resource: string) {
+    await this.admin(userId);
+    const table: Record<string, string> = {
+        "payment-attempts": "payment_attempts",
+        "payout-attempts": "payout_attempts",
+        refunds: "payment_refunds",
+        "processor-events": "payment_processor_events",
+        "processor-disputes": "processor_disputes",
+        "payment-reconciliation-runs": "payment_reconciliation_runs",
+      },
+      name = table[resource];
+    if (!name) throw fail("PAYMENT_RESOURCE_UNKNOWN", 404);
+    return {
+      items: (
+        await this.pool.query(
+          `SELECT * FROM ${name} ORDER BY created_at DESC LIMIT 200`,
+        )
+      ).rows,
+    };
+  }
 }

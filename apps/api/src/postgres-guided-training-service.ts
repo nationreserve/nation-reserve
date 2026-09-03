@@ -7,7 +7,9 @@ type Json = Record<string, unknown>;
 export class PostgresGuidedTrainingService {
   constructor(
     private readonly pool: Pool,
-    private readonly storage: { createDownloadUrl(key: string): Promise<string> },
+    private readonly storage: {
+      createDownloadUrl(bucket: string, key: string): Promise<string>;
+    },
   ) {}
   private async company(userId: string, organizationId: string, client = this.pool) {
     const r = await client.query<DbRow>(
@@ -459,7 +461,7 @@ export class PostgresGuidedTrainingService {
   async download(userId: string, organizationId: string, fileId: string) {
     const row = (
       await this.pool.query<DbRow>(
-        `SELECT o.object_key,o.filename,r.company_organization_id,mf.organization_id manufacturer_organization_id FROM guided_training_submission_files f JOIN guided_training_submissions s ON s.id=f.submission_id JOIN guided_training_requirements r ON r.id=s.requirement_id JOIN manufacturers mf ON mf.id=r.manufacturer_id JOIN stored_objects o ON o.id=f.object_id WHERE f.id=$1 AND o.status='available' AND o.malware_scan_status='clean'`,
+        `SELECT o.bucket,o.object_key,o.filename,r.company_organization_id,mf.organization_id manufacturer_organization_id FROM guided_training_submission_files f JOIN guided_training_submissions s ON s.id=f.submission_id JOIN guided_training_requirements r ON r.id=s.requirement_id JOIN manufacturers mf ON mf.id=r.manufacturer_id JOIN stored_objects o ON o.id=f.object_id WHERE f.id=$1 AND o.status='available' AND o.malware_scan_status='clean'`,
         [fileId],
       )
     ).rows[0];
@@ -474,7 +476,10 @@ export class PostgresGuidedTrainingService {
       [fileId, organizationId, userId],
     );
     return {
-      url: await this.storage.createDownloadUrl(rowString(row.object_key)),
+      url: await this.storage.createDownloadUrl(
+        rowString(row.bucket),
+        rowString(row.object_key),
+      ),
       filename: row.filename,
       expiresInSeconds: 300,
     };

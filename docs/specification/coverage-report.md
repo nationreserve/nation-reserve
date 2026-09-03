@@ -1,6 +1,6 @@
 # Specification Coverage Report
 
-Generated: 2026-08-10T19:59:23.162Z
+Generated: 2026-09-03T03:42:35.755Z
 
 ## Executive summary
 

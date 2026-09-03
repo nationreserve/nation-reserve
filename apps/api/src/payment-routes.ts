@@ -1,24 +1,186 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-import type{AppFastifyInstance,AppFastifyRequest}from"./fastify-types.js";
-import{Readable}from"node:stream";import{z}from"zod";import type{PostgresPaymentService}from"./postgres-payment-service.js";
-type RawRequest=AppFastifyRequest&{paymentRawBody?:Buffer};
-export function registerPaymentRoutes(app:AppFastifyInstance,options:{service:PostgresPaymentService;authenticate(r:AppFastifyRequest):Promise<{userId:string}>}){
- app.addHook("preParsing",async(request,_reply,payload)=>{if(!request.url.startsWith("/api/v1/payment-webhooks/"))return payload;const chunks:Buffer[]=[];for await(const chunk of payload)chunks.push(Buffer.isBuffer(chunk)?chunk:Buffer.from(chunk));const raw=Buffer.concat(chunks);(request as RawRequest).paymentRawBody=raw;const stream=Readable.from(raw)as Readable&{receivedEncodedLength?:number};stream.receivedEncodedLength=raw.length;return stream;});
- const actor=async(r:AppFastifyRequest)=>(await options.authenticate(r)).userId,org="/api/v1/organizations/:organizationId";
- for(const resource of["payment-methods","payout-account","payment-attempts","payout-attempts"] as const)app.get<{Params:{organizationId:string}}>(`${org}/${resource==="payment-methods"?"billing/payment-methods":resource==="payout-account"?"earnings/payout-account":resource}`,async r=>options.service.organization(await actor(r),r.params.organizationId,resource));
- app.post<{Params:{organizationId:string}}>(`${org}/billing/payment-methods/setup`,async r=>options.service.setupPaymentMethod(await actor(r),r.params.organizationId));
- app.post<{Params:{organizationId:string}}>(`${org}/billing/payment-methods/confirm`,async r=>{const b=z.object({providerPaymentMethodId:z.string().min(3),makeDefault:z.boolean().default(true)}).parse(r.body);return options.service.confirmPaymentMethod(await actor(r),r.params.organizationId,b.providerPaymentMethodId,b.makeDefault);});
- app.delete<{Params:{organizationId:string;id:string}}>(`${org}/billing/payment-methods/:id`,async r=>options.service.removePaymentMethod(await actor(r),r.params.organizationId,r.params.id));
- app.post<{Params:{organizationId:string;id:string}}>(`${org}/billing/payment-methods/:id/default`,async r=>options.service.setDefaultPaymentMethod(await actor(r),r.params.organizationId,r.params.id));
- app.post<{Params:{organizationId:string}}>(`${org}/earnings/payout-account/onboarding-link`,async r=>options.service.payoutOnboarding(await actor(r),r.params.organizationId));
- app.post<{Params:{organizationId:string}}>(`${org}/earnings/payout-account/refresh`,async r=>options.service.refreshPayoutAccount(await actor(r),r.params.organizationId));
- app.post<{Params:{organizationId:string;invoiceId:string}}>(`${org}/invoices/:invoiceId/pay`,async r=>options.service.collect(await actor(r),r.params.invoiceId,r.params.organizationId));
- app.post<{Params:{id:string}}>("/api/v1/platform/invoices/:id/collect",async r=>options.service.collect(await actor(r),r.params.id));
- app.post<{Params:{id:string}}>("/api/v1/platform/payment-attempts/:id/refunds",async r=>{const b=z.object({amountMinorUnits:z.number().int().positive(),financialAdjustmentId:z.string().uuid()}).parse(r.body);return options.service.refund(await actor(r),r.params.id,b);});
- app.post("/api/v1/platform/payment-reconciliation-runs",async r=>options.service.reconcilePayments(await actor(r)));
- app.post<{Params:{id:string}}>("/api/v1/platform/settlement-batches/:id/submit",async r=>options.service.submitSettlementBatch(await actor(r),r.params.id));
- app.post<{Params:{id:string}}>("/api/v1/platform/earnings-statements/:id/payout",async r=>options.service.payout(await actor(r),r.params.id));
- app.get("/api/v1/platform/payment-metrics",async(r,reply)=>reply.type("text/plain; version=0.0.4").send(await options.service.metrics(await actor(r))));
- for(const resource of["payment-attempts","payout-attempts","refunds","processor-events","processor-disputes","payment-reconciliation-runs"] as const)app.get(`/api/v1/platform/${resource}`,async r=>options.service.platform(await actor(r),resource));
- app.post<{Params:{provider:string}}>("/api/v1/payment-webhooks/:provider",async(request,reply)=>{if(request.params.provider!=="stripe"&&request.params.provider!=="fake")return reply.status(404).send({code:"PAYMENT_PROVIDER_UNKNOWN"});const signature=request.headers["stripe-signature"]??request.headers["x-payment-signature"];if(typeof signature!=="string")return reply.status(400).send({code:"PAYMENT_WEBHOOK_SIGNATURE_REQUIRED"});const raw=(request as RawRequest).paymentRawBody;if(!raw)return reply.status(400).send({code:"PAYMENT_WEBHOOK_RAW_BODY_REQUIRED"});return reply.status(202).send(await options.service.processWebhook(raw,signature));});
+import type { AppFastifyInstance, AppFastifyRequest } from "./fastify-types.js";
+import { Readable } from "node:stream";
+import { z } from "zod";
+import type { PostgresPaymentService } from "./postgres-payment-service.js";
+type RawRequest = AppFastifyRequest & { paymentRawBody?: Buffer };
+export function registerPaymentRoutes(
+  app: AppFastifyInstance,
+  options: {
+    service: PostgresPaymentService;
+    authenticate(r: AppFastifyRequest): Promise<{ userId: string }>;
+  },
+) {
+  app.addHook("preParsing", async (request, _reply, payload) => {
+    if (!request.url.startsWith("/api/v1/payment-webhooks/")) return payload;
+    const chunks: Buffer[] = [];
+    for await (const chunk of payload)
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const raw = Buffer.concat(chunks);
+    (request as RawRequest).paymentRawBody = raw;
+    const stream = Readable.from(raw) as Readable & { receivedEncodedLength?: number };
+    stream.receivedEncodedLength = raw.length;
+    return stream;
+  });
+  const actor = async (r: AppFastifyRequest) => (await options.authenticate(r)).userId,
+    org = "/api/v1/organizations/:organizationId";
+  for (const resource of [
+    "payment-methods",
+    "payout-account",
+    "payment-attempts",
+    "payout-attempts",
+  ] as const)
+    app.get<{ Params: { organizationId: string } }>(
+      `${org}/${resource === "payment-methods" ? "billing/payment-methods" : resource === "payout-account" ? "earnings/payout-account" : resource}`,
+      async (r) =>
+        options.service.organization(await actor(r), r.params.organizationId, resource),
+    );
+  app.post<{ Params: { organizationId: string } }>(
+    `${org}/billing/payment-methods/setup`,
+    async (r) =>
+      options.service.setupPaymentMethod(await actor(r), r.params.organizationId),
+  );
+  app.post<{ Params: { organizationId: string } }>(
+    `${org}/billing/payment-methods/confirm`,
+    async (r) => {
+      const b = z
+        .object({
+          providerPaymentMethodId: z.string().min(3),
+          makeDefault: z.boolean().default(true),
+        })
+        .parse(r.body);
+      return options.service.confirmPaymentMethod(
+        await actor(r),
+        r.params.organizationId,
+        b.providerPaymentMethodId,
+        b.makeDefault,
+      );
+    },
+  );
+  app.delete<{ Params: { organizationId: string; id: string } }>(
+    `${org}/billing/payment-methods/:id`,
+    async (r) =>
+      options.service.removePaymentMethod(
+        await actor(r),
+        r.params.organizationId,
+        r.params.id,
+      ),
+  );
+  app.post<{ Params: { organizationId: string; id: string } }>(
+    `${org}/billing/payment-methods/:id/default`,
+    async (r) =>
+      options.service.setDefaultPaymentMethod(
+        await actor(r),
+        r.params.organizationId,
+        r.params.id,
+      ),
+  );
+  app.post<{ Params: { organizationId: string } }>(
+    `${org}/earnings/payout-account/onboarding-link`,
+    async (r) =>
+      options.service.payoutOnboarding(await actor(r), r.params.organizationId),
+  );
+  app.post<{ Params: { organizationId: string } }>(
+    `${org}/earnings/payout-account/refresh`,
+    async (r) =>
+      options.service.refreshPayoutAccount(await actor(r), r.params.organizationId),
+  );
+  app.post<{ Params: { organizationId: string; invoiceId: string } }>(
+    `${org}/invoices/:invoiceId/pay`,
+    async (r) =>
+      options.service.collect(
+        await actor(r),
+        r.params.invoiceId,
+        r.params.organizationId,
+      ),
+  );
+  app.get<{ Params: { organizationId: string; contractId: string } }>(
+    `${org}/company/contracts/:contractId/downpayment`,
+    async (r) =>
+      options.service.contractDownpayment(
+        await actor(r),
+        r.params.organizationId,
+        r.params.contractId,
+      ),
+  );
+  app.post<{ Params: { organizationId: string; contractId: string } }>(
+    `${org}/company/contracts/:contractId/downpayment`,
+    async (r) => {
+      const body = z
+        .object({ paymentMethodId: z.string().uuid().optional() })
+        .parse(r.body);
+      const idempotency = z
+        .string()
+        .min(8)
+        .max(200)
+        .parse(r.headers["idempotency-key"]);
+      return options.service.fundContractDownpayment(
+        await actor(r),
+        r.params.organizationId,
+        r.params.contractId,
+        body.paymentMethodId,
+        idempotency,
+      );
+    },
+  );
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/platform/invoices/:id/collect",
+    async (r) => options.service.collect(await actor(r), r.params.id),
+  );
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/platform/payment-attempts/:id/refunds",
+    async (r) => {
+      const b = z
+        .object({
+          amountMinorUnits: z.number().int().positive(),
+          financialAdjustmentId: z.string().uuid(),
+        })
+        .parse(r.body);
+      return options.service.refund(await actor(r), r.params.id, b);
+    },
+  );
+  app.post("/api/v1/platform/payment-reconciliation-runs", async (r) =>
+    options.service.reconcilePayments(await actor(r)),
+  );
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/platform/settlement-batches/:id/submit",
+    async (r) => options.service.submitSettlementBatch(await actor(r), r.params.id),
+  );
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/platform/earnings-statements/:id/payout",
+    async (r) => options.service.payout(await actor(r), r.params.id),
+  );
+  app.get("/api/v1/platform/payment-metrics", async (r, reply) =>
+    reply
+      .type("text/plain; version=0.0.4")
+      .send(await options.service.metrics(await actor(r))),
+  );
+  for (const resource of [
+    "payment-attempts",
+    "payout-attempts",
+    "refunds",
+    "processor-events",
+    "processor-disputes",
+    "payment-reconciliation-runs",
+  ] as const)
+    app.get(`/api/v1/platform/${resource}`, async (r) =>
+      options.service.platform(await actor(r), resource),
+    );
+  app.post<{ Params: { provider: string } }>(
+    "/api/v1/payment-webhooks/:provider",
+    async (request, reply) => {
+      if (request.params.provider !== "stripe" && request.params.provider !== "fake")
+        return reply.status(404).send({ code: "PAYMENT_PROVIDER_UNKNOWN" });
+      const signature =
+        request.headers["stripe-signature"] ?? request.headers["x-payment-signature"];
+      if (typeof signature !== "string")
+        return reply.status(400).send({ code: "PAYMENT_WEBHOOK_SIGNATURE_REQUIRED" });
+      const raw = (request as RawRequest).paymentRawBody;
+      if (!raw)
+        return reply.status(400).send({ code: "PAYMENT_WEBHOOK_RAW_BODY_REQUIRED" });
+      return reply
+        .status(202)
+        .send(await options.service.processWebhook(raw, signature));
+    },
+  );
 }

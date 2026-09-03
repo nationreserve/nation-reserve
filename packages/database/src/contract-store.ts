@@ -88,8 +88,8 @@ class PostgresContractRepositories implements ContractRepositories {
         `INSERT INTO contracts
       (manufacturer_id,hiring_company_id,facility_id,department_id,contract_type,status,
        requested_robot_count,priority,start_at,end_at,renewal_mode,rate_configuration_version_id,
-       created_by_user_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+       created_by_user_id,estimated_contract_value_cents)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
         [
           v.manufacturerId,
           v.hiringCompanyId,
@@ -104,6 +104,7 @@ class PostgresContractRepositories implements ContractRepositories {
           v.renewalMode,
           v.rateConfigurationVersionId,
           v.createdByUserId,
+          v.estimatedContractValueCents,
         ],
       )
     ).rows[0];
@@ -131,8 +132,8 @@ class PostgresContractRepositories implements ContractRepositories {
         `INSERT INTO contract_versions
       (contract_id,version_number,requested_robot_count,operating_windows,required_capabilities,
        location_requirements,special_terms,effective_at,created_by_user_id,change_reason,status,
-       start_at,end_at)
-      VALUES($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12) RETURNING *`,
+       start_at,end_at,estimated_contract_value_cents)
+      VALUES($1,$2,$3,$4,$5,$6,$7,now(),$8,$9,$10,$11,$12,$13) RETURNING *`,
         [
           v.contractId,
           v.versionNumber,
@@ -146,14 +147,20 @@ class PostgresContractRepositories implements ContractRepositories {
           v.status,
           v.startAt,
           v.endAt,
+          v.estimatedContractValueCents,
         ],
       )
     ).rows[0];
     await this.client.query(
       `UPDATE contracts SET current_version_number=$2,requested_robot_count=$3,
-      assigned_robot_count=LEAST(assigned_robot_count,$3),approved_by_manufacturer_at=NULL,
+      assigned_robot_count=LEAST(assigned_robot_count,$3),estimated_contract_value_cents=$4,approved_by_manufacturer_at=NULL,
       approved_by_company_at=NULL,status='draft' WHERE id=$1`,
-      [v.contractId, v.versionNumber, v.requestedRobotCount],
+      [
+        v.contractId,
+        v.versionNumber,
+        v.requestedRobotCount,
+        v.estimatedContractValueCents,
+      ],
     );
     return mapVersion(row);
   }

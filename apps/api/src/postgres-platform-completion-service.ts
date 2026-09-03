@@ -20,7 +20,9 @@ const safeTypes = new Set([
 export class PostgresPlatformCompletionService {
   constructor(
     private readonly pool: Pool,
-    private readonly storage: { createDownloadUrl(key: string): Promise<string> },
+    private readonly storage: {
+      createDownloadUrl(bucket: string, key: string): Promise<string>;
+    },
   ) {}
   private async member(userId: string, organizationId: string) {
     const r = await this.pool.query<DbRow>(
@@ -281,6 +283,198 @@ export class PostgresPlatformCompletionService {
       privacy: "Other participants are anonymized.",
     };
   }
+  async verificationStatus(userId: string, organizationId: string) {
+    const membership = await this.member(userId, organizationId);
+    const [individual, organization, documents] = await Promise.all([
+      this.pool.query<DbRow>(
+        `SELECT status,verified_at "verifiedAt",last_error_code "lastErrorCode",updated_at "updatedAt"
+         FROM individual_identity_verifications WHERE user_id=$1
+         ORDER BY created_at DESC LIMIT 1`,
+        [userId],
+      ),
+      this.pool.query<DbRow>(
+        `SELECT business_verification_status "businessStatus",
+          representative_authorization_status "representativeStatus",
+          representative_user_id "representativeUserId",review_summary "reviewSummary",
+          business_verified_at "businessVerifiedAt",
+          representative_verified_at "representativeVerifiedAt",updated_at "updatedAt"
+         FROM organization_verification_profiles WHERE organization_id=$1`,
+        [organizationId],
+      ),
+      this.pool.query<DbRow>(
+        `SELECT d.id,d.document_type "documentType",d.status,d.review_note "reviewNote",
+          o.filename,o.content_type "contentType",d.created_at "createdAt"
+         FROM organization_verification_documents d JOIN stored_objects o ON o.id=d.object_id
+         WHERE d.organization_id=$1 ORDER BY d.created_at DESC`,
+        [organizationId],
+      ),
+    ]);
+    return {
+      organizationType: membership.organization_type,
+      individual: individual.rows[0] ?? { status: "unverified" },
+      organization: organization.rows[0] ?? {
+        businessStatus: "unverified",
+        representativeStatus: "unverified",
+      },
+      documents: documents.rows,
+      requirements:
+        membership.organization_type === "robot_owner"
+          ? ["individual_identity"]
+          : [
+              "individual_identity",
+              "business_verification",
+              "representative_authorization",
+            ],
+    };
+  }
+  async submitVerificationDocument(
+    userId: string,
+    organizationId: string,
+    input: { objectId: string; documentType: string },
+  ) {
+    const membership = await this.member(userId, organizationId);
+    if (
+      ![
+        "administrator",
+        "manager",
+        "owner",
+        "company_owner",
+        "manufacturer_admin",
+      ].includes(membership.role)
+    )
+      throw err("VERIFICATION_DOCUMENT_PERMISSION_REQUIRED", 403);
+    if (membership.organization_type === "robot_owner")
+      throw err("BUSINESS_VERIFICATION_NOT_APPLICABLE", 409);
+    return this.tx(async (c) => {
+      const object = (
+        await c.query<DbRow>(
+          `SELECT id FROM stored_objects WHERE id=$1 AND organization_id=$2
+         AND status='available' AND malware_scan_status='clean' FOR UPDATE`,
+          [input.objectId, organizationId],
+        )
+      ).rows[0];
+      if (!object) throw err("PRIVATE_VERIFICATION_DOCUMENT_NOT_AVAILABLE", 409);
+      const row = (
+        await c.query<DbRow>(
+          `INSERT INTO organization_verification_documents(
+          organization_id,object_id,document_type,submitted_by_user_id)
+         VALUES($1,$2,$3,$4) RETURNING *`,
+          [organizationId, input.objectId, input.documentType, userId],
+        )
+      ).rows[0];
+      await c.query<DbRow>(
+        `INSERT INTO organization_verification_profiles(
+          organization_id,business_verification_status,representative_authorization_status,
+          representative_user_id)
+         VALUES($1,$2,$3,$4)
+         ON CONFLICT(organization_id) DO UPDATE SET
+          business_verification_status=CASE WHEN $2='pending' AND organization_verification_profiles.business_verification_status<>'verified' THEN 'pending' ELSE organization_verification_profiles.business_verification_status END,
+          representative_authorization_status=CASE WHEN $3='pending' AND organization_verification_profiles.representative_authorization_status<>'verified' THEN 'pending' ELSE organization_verification_profiles.representative_authorization_status END,
+          representative_user_id=COALESCE(organization_verification_profiles.representative_user_id,$4),updated_at=now()`,
+        [
+          organizationId,
+          input.documentType === "representative_authorization"
+            ? "unverified"
+            : "pending",
+          input.documentType === "representative_authorization"
+            ? "pending"
+            : "unverified",
+          userId,
+        ],
+      );
+      await this.audit(
+        c,
+        userId,
+        "ORGANIZATION_VERIFICATION_DOCUMENT_SUBMITTED",
+        "organization_verification_document",
+        rowScalar(row?.id),
+        { organizationId, documentType: input.documentType },
+      );
+      return row;
+    });
+  }
+  async verificationCases(userId: string) {
+    await this.admin(userId);
+    return {
+      items: (
+        await this.pool.query<DbRow>(
+          `SELECT o.id organization_id,o.display_name,o.organization_type,o.status organization_status,
+        p.business_verification_status,p.representative_authorization_status,
+        p.representative_user_id,p.review_summary,p.updated_at,
+        count(d.id)::int document_count,
+        count(d.id) FILTER(WHERE d.status IN('submitted','under_review'))::int pending_documents
+       FROM organizations o
+       LEFT JOIN organization_verification_profiles p ON p.organization_id=o.id
+       LEFT JOIN organization_verification_documents d ON d.organization_id=o.id
+       WHERE o.organization_type IN('hiring_company','manufacturer')
+       GROUP BY o.id,p.organization_id ORDER BY p.updated_at NULLS FIRST,o.created_at DESC LIMIT 500`,
+        )
+      ).rows,
+    };
+  }
+  async reviewVerification(
+    userId: string,
+    organizationId: string,
+    input: {
+      businessStatus:
+        "pending" | "verified" | "requires_input" | "rejected" | "suspended";
+      representativeStatus:
+        "pending" | "verified" | "requires_input" | "rejected" | "suspended";
+      representativeUserId?: string | undefined;
+      summary: string;
+    },
+  ) {
+    await this.admin(userId);
+    return this.tx(async (c) => {
+      const before = (
+        await c.query<DbRow>(
+          `SELECT * FROM organization_verification_profiles WHERE organization_id=$1 FOR UPDATE`,
+          [organizationId],
+        )
+      ).rows[0];
+      const row = (
+        await c.query<DbRow>(
+          `INSERT INTO organization_verification_profiles(
+          organization_id,business_verification_status,representative_authorization_status,
+          representative_user_id,reviewed_by_user_id,review_summary,business_verified_at,
+          representative_verified_at)
+         VALUES($1,$2,$3,$4,$5,$6,
+          CASE WHEN $2='verified' THEN now() ELSE NULL END,
+          CASE WHEN $3='verified' THEN now() ELSE NULL END)
+         ON CONFLICT(organization_id) DO UPDATE SET
+          business_verification_status=EXCLUDED.business_verification_status,
+          representative_authorization_status=EXCLUDED.representative_authorization_status,
+          representative_user_id=COALESCE(EXCLUDED.representative_user_id,organization_verification_profiles.representative_user_id),
+          reviewed_by_user_id=EXCLUDED.reviewed_by_user_id,review_summary=EXCLUDED.review_summary,
+          business_verified_at=CASE WHEN EXCLUDED.business_verification_status='verified' THEN COALESCE(organization_verification_profiles.business_verified_at,now()) ELSE organization_verification_profiles.business_verified_at END,
+          representative_verified_at=CASE WHEN EXCLUDED.representative_authorization_status='verified' THEN COALESCE(organization_verification_profiles.representative_verified_at,now()) ELSE organization_verification_profiles.representative_verified_at END,
+          updated_at=now() RETURNING *`,
+          [
+            organizationId,
+            input.businessStatus,
+            input.representativeStatus,
+            input.representativeUserId ?? null,
+            userId,
+            JSON.stringify({ summary: input.summary }),
+          ],
+        )
+      ).rows[0];
+      await c.query<DbRow>(
+        `UPDATE organization_verification_documents SET status='under_review',reviewed_by_user_id=$2,
+          review_note=$3,reviewed_at=now() WHERE organization_id=$1 AND status='submitted'`,
+        [organizationId, userId, input.summary],
+      );
+      await this.audit(
+        c,
+        userId,
+        "ORGANIZATION_VERIFICATION_REVIEWED",
+        "organization",
+        organizationId,
+        { before, after: row },
+      );
+      return row;
+    });
+  }
   async adminOverview(userId: string) {
     await this.admin(userId);
     const q = async (sql: string) => (await this.pool.query<DbRow>(sql)).rows[0];
@@ -352,7 +546,10 @@ export class PostgresPlatformCompletionService {
     );
     return {
       filename: row.filename,
-      url: await this.storage.createDownloadUrl(rowScalar(row.object_key)),
+      url: await this.storage.createDownloadUrl(
+        rowScalar(row.bucket),
+        rowScalar(row.object_key),
+      ),
       expiresInSeconds: 300,
     };
   }

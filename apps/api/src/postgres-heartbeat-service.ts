@@ -40,7 +40,13 @@ export class PostgresHeartbeatRouteService implements HeartbeatRouteService {
     const { rows } = await this.pool.query(
       `SELECT m.id FROM manufacturers m JOIN organization_memberships om
       ON om.organization_id=m.organization_id AND om.user_id=$1 AND om.status='active'
-      WHERE m.organization_id=$2 AND m.approval_status='production_approved' AND m.production_access_status='production'`,
+      JOIN organization_verification_profiles v ON v.organization_id=m.organization_id
+      WHERE m.organization_id=$2 AND om.role='administrator'
+        AND m.approval_status='production_approved' AND m.production_access_status='production'
+        AND v.business_verification_status='verified'
+        AND v.representative_authorization_status='verified'
+        AND EXISTS(SELECT 1 FROM individual_identity_verifications i
+          WHERE i.user_id=$1 AND i.status='verified')`,
       [userId, organizationId],
     );
     if (!rows[0]) throw denied();

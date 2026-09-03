@@ -60,13 +60,17 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
-      S3_BUCKET: ${S3_BUCKET:?Set S3_BUCKET in .env}
+      S3_TRAINING_DATA_BUCKET: ${S3_TRAINING_DATA_BUCKET:?Set S3_TRAINING_DATA_BUCKET in .env}
+      S3_MANUFACTURER_DOCUMENTS_BUCKET: ${S3_MANUFACTURER_DOCUMENTS_BUCKET:?Set S3_MANUFACTURER_DOCUMENTS_BUCKET in .env}
+      S3_CONTRACT_DOCUMENTS_BUCKET: ${S3_CONTRACT_DOCUMENTS_BUCKET:?Set S3_CONTRACT_DOCUMENTS_BUCKET in .env}
     entrypoint:
       - /bin/sh
       - -c
       - >
         mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
-        mc mb --ignore-existing "local/$${S3_BUCKET}"
+        mc mb --ignore-existing "local/$${S3_TRAINING_DATA_BUCKET}" &&
+        mc mb --ignore-existing "local/$${S3_MANUFACTURER_DOCUMENTS_BUCKET}" &&
+        mc mb --ignore-existing "local/$${S3_CONTRACT_DOCUMENTS_BUCKET}"
     restart: "no"
 
 volumes:

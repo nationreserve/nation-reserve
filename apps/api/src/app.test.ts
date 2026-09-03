@@ -14,7 +14,9 @@ const config: ApiConfig = {
   S3_REGION: "us-east-1",
   S3_ACCESS_KEY: "key",
   S3_SECRET_KEY: "secret",
-  S3_BUCKET: "bucket",
+  S3_TRAINING_DATA_BUCKET: "training-bucket",
+  S3_MANUFACTURER_DOCUMENTS_BUCKET: "manufacturer-bucket",
+  S3_CONTRACT_DOCUMENTS_BUCKET: "contract-bucket",
   WEB_ORIGIN: "http://localhost:5173",
   LOG_LEVEL: "silent",
 };

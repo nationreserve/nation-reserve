@@ -31,25 +31,27 @@ Create these groups before syncing `render.yaml`.
 
 ### `roboworkpool-production-runtime`
 
-| Variable                         | Classification                      | Required value / source                                                                            | Current status                       |
-| -------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `NODE_ENV`                       | public/client-safe operational      | `production`                                                                                       | known                                |
-| `DEPLOY_ENVIRONMENT`             | public/client-safe operational      | `production`                                                                                       | known                                |
-| `DATABASE_URL`                   | server secret / external credential | Production Supabase pooled application connection for project `djejksnxdhcgtnkinxcp`, TLS required | still needed in Render               |
-| `S3_ENDPOINT`                    | server configuration                | `https://djejksnxdhcgtnkinxcp.storage.supabase.co/storage/v1/s3`                                   | known, verify in Storage S3 settings |
-| `S3_REGION`                      | server configuration                | Exact region shown by Supabase Storage S3 settings                                                 | still needed                         |
-| `S3_ACCESS_KEY`                  | external-service credential         | Generated Supabase Storage S3 Access Key ID                                                        | still needed                         |
-| `S3_SECRET_KEY`                  | external-service credential         | Matching Supabase Storage S3 Secret Access Key                                                     | still needed                         |
-| `S3_BUCKET`                      | server configuration                | Pre-created private file bucket, recommended `roboworkpool-private`                                | still needed                         |
-| `WEB_ORIGIN`                     | public/client-safe                  | `https://nationreserve.com`                                                                        | known                                |
-| `LOG_LEVEL`                      | public/client-safe operational      | `info`                                                                                             | known                                |
-| `PAYMENT_PROVIDER`               | server configuration                | `stripe`                                                                                           | known                                |
-| `PAYMENT_PROVIDER_ENVIRONMENT`   | server configuration                | `live`                                                                                             | known                                |
-| `PAYMENT_EXECUTION_ENABLED`      | security-sensitive feature switch   | `true` only because live execution was separately approved/configured                              | known decision; enter explicitly     |
-| `COOKIE_SECURE`                  | security setting                    | `true`                                                                                             | known                                |
-| `TIMELINE_PROJECTION_ENABLED`    | business-rule setting               | `true`                                                                                             | known                                |
-| `SPECIFICATION_SYNC_ENABLED`     | security setting                    | `false`                                                                                            | known                                |
-| `DOWNPAYMENT_ENROLLMENT_ENABLED` | business-rule setting               | `false` until public enrollment is approved                                                        | known default                        |
+| Variable                           | Classification                      | Required value / source                                                                            | Current status                       |
+| ---------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `NODE_ENV`                         | public/client-safe operational      | `production`                                                                                       | known                                |
+| `DEPLOY_ENVIRONMENT`               | public/client-safe operational      | `production`                                                                                       | known                                |
+| `DATABASE_URL`                     | server secret / external credential | Production Supabase pooled application connection for project `djejksnxdhcgtnkinxcp`, TLS required | still needed in Render               |
+| `S3_ENDPOINT`                      | server configuration                | `https://djejksnxdhcgtnkinxcp.storage.supabase.co/storage/v1/s3`                                   | known, verify in Storage S3 settings |
+| `S3_REGION`                        | server configuration                | Exact region shown by Supabase Storage S3 settings                                                 | still needed                         |
+| `S3_ACCESS_KEY`                    | external-service credential         | Generated Supabase Storage S3 Access Key ID                                                        | still needed                         |
+| `S3_SECRET_KEY`                    | external-service credential         | Matching Supabase Storage S3 Secret Access Key                                                     | still needed                         |
+| `S3_TRAINING_DATA_BUCKET`          | server configuration                | `training-data-private`                                                                            | bucket exists; Render value needed   |
+| `S3_MANUFACTURER_DOCUMENTS_BUCKET` | server configuration                | `manufacturer-documents-private`                                                                   | bucket exists; Render value needed   |
+| `S3_CONTRACT_DOCUMENTS_BUCKET`     | server configuration                | `contract-documents-private`                                                                       | bucket exists; Render value needed   |
+| `WEB_ORIGIN`                       | public/client-safe                  | `https://nationreserve.com`                                                                        | known                                |
+| `LOG_LEVEL`                        | public/client-safe operational      | `info`                                                                                             | known                                |
+| `PAYMENT_PROVIDER`                 | server configuration                | `stripe`                                                                                           | known                                |
+| `PAYMENT_PROVIDER_ENVIRONMENT`     | server configuration                | `live`                                                                                             | known                                |
+| `PAYMENT_EXECUTION_ENABLED`        | security-sensitive feature switch   | `true` only because live execution was separately approved/configured                              | known decision; enter explicitly     |
+| `COOKIE_SECURE`                    | security setting                    | `true`                                                                                             | known                                |
+| `TIMELINE_PROJECTION_ENABLED`      | business-rule setting               | `true`                                                                                             | known                                |
+| `SPECIFICATION_SYNC_ENABLED`       | security setting                    | `false`                                                                                            | known                                |
+| `DOWNPAYMENT_ENROLLMENT_ENABLED`   | business-rule setting               | `false` until public enrollment is approved                                                        | known default                        |
 
 Each service receives `REDIS_URL` directly from the private Render Key Value `connectionString`. Do not place a public Redis URL in either group.
 

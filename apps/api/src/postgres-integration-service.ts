@@ -434,6 +434,13 @@ export class PostgresIntegrationRouteService implements IntegrationRouteService 
     return { ...row, code };
   }
   async claimRobot(userId: string, robotId: string, input: object) {
+    const verified = (
+      await this.pool.query(
+        "SELECT 1 FROM individual_identity_verifications WHERE user_id=$1 AND status='verified'",
+        [userId],
+      )
+    ).rows[0];
+    if (!verified) throw denied("IDENTITY_VERIFICATION_REQUIRED", 403);
     const value = input as { ownerOrganizationId: string; transferCode: string };
     return this.#ownership.claim(
       userId,
@@ -483,9 +490,12 @@ export class PostgresIntegrationRouteService implements IntegrationRouteService 
   private async manufacturer(userId: string, organizationId: string, write: boolean) {
     const row = (
       await this.pool.query(
-        `SELECT m.id,o.status,om.role,om.status AS membership_status
+        `SELECT m.id,o.status,om.role,om.status AS membership_status,
+        EXISTS(SELECT 1 FROM individual_identity_verifications i WHERE i.user_id=$2 AND i.status='verified') AS identity_verified,
+        v.business_verification_status,v.representative_authorization_status
       FROM manufacturers m JOIN organizations o ON o.id=m.organization_id
       JOIN organization_memberships om ON om.organization_id=o.id
+      LEFT JOIN organization_verification_profiles v ON v.organization_id=o.id
       WHERE o.id=$1 AND om.user_id=$2`,
         [organizationId, userId],
       )
@@ -493,7 +503,11 @@ export class PostgresIntegrationRouteService implements IntegrationRouteService 
     if (
       !row ||
       row.membership_status !== "active" ||
-      (write && row.role !== "administrator")
+      (write &&
+        (row.role !== "administrator" ||
+          !row.identity_verified ||
+          row.business_verification_status !== "verified" ||
+          row.representative_authorization_status !== "verified"))
     )
       throw denied("PERMISSION_DENIED", 403);
     return row;
