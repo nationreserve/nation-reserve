@@ -1,6 +1,6 @@
 {
-  "generatedAt": "2026-08-11T02:38:28.801Z",
-  "migrationCount": 37,
+  "generatedAt": "2026-09-04T01:34:36.305Z",
+  "migrationCount": 43,
   "items": [
     {
       "filename": "0001_core_domain.sql",
@@ -11,7 +11,7 @@
     },
     {
       "filename": "0002_authentication_and_access.sql",
-      "sha256": "3d0859d69216f423a217a14b5de0e6f7d7d421fd4014872f851f164df2034b80",
+      "sha256": "22e10acc98dc3ddc3e93e03c71b004b97fc60dc936655e301e0aa979526808c8",
       "risk": "high_risk",
       "requiresBackup": true,
       "requiresApproval": true
@@ -260,6 +260,48 @@
       "risk": "high_risk",
       "requiresBackup": true,
       "requiresApproval": true
+    },
+    {
+      "filename": "0038_guided_training_data_workflow.sql",
+      "sha256": "7e86c593ab3ef1b48b8133136a5dc1d99d83208457e04ad774cc240c891c47f1",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0039_support_secure_attachments_admin_diagnostics.sql",
+      "sha256": "118eeaf570b92a3db3c9d627cd716411f9326173bba512829f77b13cf1f3ed54",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0040_supabase_access_and_journal_integrity.sql",
+      "sha256": "9e8bfb594f8b0297011b27a28874a508a7f9d00436d3da27a80864afe4c2d1ed",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0041_initial_platform_financial_configuration.sql",
+      "sha256": "49a7f256c1cc816ac2c4e202e70ff33dc4cbde8628a13226609ac72a33c3168c",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
+    },
+    {
+      "filename": "0042_trust_verification_and_employer_downpayment_rule.sql",
+      "sha256": "fca97762c4c0deafa13f9de24db5ae3b422383255b68e6bbb3efb8c183461c91",
+      "risk": "high_risk",
+      "requiresBackup": true,
+      "requiresApproval": true
+    },
+    {
+      "filename": "0043_reconcile_private_storage_buckets.sql",
+      "sha256": "8c24166425e9a4220673036421b32edf84068d4524c7d088f05e8796051e7d41",
+      "risk": "low_risk",
+      "requiresBackup": false,
+      "requiresApproval": false
     }
   ]
 }

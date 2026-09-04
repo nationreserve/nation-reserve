@@ -25,6 +25,19 @@ describe("production database security repair migration", () => {
     expect(sql).toContain("SET public = false");
   });
 
+  it("reconciles every required private bucket after Supabase Storage is enabled", async () => {
+    const sql = await readFile(
+      resolve("migrations/0043_reconcile_private_storage_buckets.sql"),
+      "utf8",
+    );
+    expect(sql).toContain("INSERT INTO storage.buckets");
+    expect(sql).toContain("training-data-private");
+    expect(sql).toContain("manufacturer-documents-private");
+    expect(sql).toContain("contract-documents-private");
+    expect(sql).toContain("public = false");
+    expect(sql).not.toMatch(/(?:USING|WITH CHECK)\s*\(\s*true\s*\)/i);
+  });
+
   it("closes both posted-journal mutation bypasses", async () => {
     const sql = await readFile(
       resolve("migrations/0040_supabase_access_and_journal_integrity.sql"),
