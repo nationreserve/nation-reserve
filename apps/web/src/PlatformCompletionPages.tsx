@@ -83,7 +83,7 @@ function currentUserRole() {
         : "AUTHENTICATED_USER";
 }
 async function upload(org: string, file: File, setStatus: (value: string) => void) {
-  setStatus(`Uploading ${file.name}â€¦`);
+  setStatus(`Uploading ${file.name}…`);
   const intent = await api.post<UploadIntent>(
     "/api/v1/storage/uploads",
     {
@@ -181,7 +181,7 @@ export function SupportPage({ path }: { path: string }) {
           <p className="eyebrow">Help & Support</p>
           <h1>{data?.subject ?? "Support request"}</h1>
           <p>
-            Status: <strong>{data?.status ?? "Loadingâ€¦"}</strong>
+            Status: <strong>{data?.status ?? "Loading…"}</strong>
           </p>
           {data?.messages?.map((message) => (
             <article className="card" key={message.id}>
@@ -214,7 +214,7 @@ export function SupportPage({ path }: { path: string }) {
                   );
               }}
             >
-              {attachment.filename} Â· {attachment.scanStatus}
+              {attachment.filename} · {attachment.scanStatus}
             </button>
           ))}
           <form
@@ -314,7 +314,7 @@ export function SupportPage({ path }: { path: string }) {
                 #{ticket.ticketNumber} {ticket.subject}
               </strong>
               <span>
-                {ticket.status} Â· {ticket.category}
+                {ticket.status} · {ticket.category}
               </span>
             </button>
           ))
@@ -323,8 +323,8 @@ export function SupportPage({ path }: { path: string }) {
         )}
         <h2>Common help</h2>
         <nav>
-          <a href="/support?category=PAYMENTS">Payment help</a> Â·{" "}
-          <a href="/support?category=HEARTBEAT_ROBOT_OFFLINE">Robot offline help</a> Â·{" "}
+          <a href="/support?category=PAYMENTS">Payment help</a> ·{" "}
+          <a href="/support?category=HEARTBEAT_ROBOT_OFFLINE">Robot offline help</a> ·{" "}
           <a href="/support?category=TRAINING_DATA">Training upload help</a>
         </nav>
       </section>
