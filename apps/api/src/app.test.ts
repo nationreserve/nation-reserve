@@ -98,3 +98,69 @@ describe("health routes", () => {
     });
   });
 });
+
+describe("credentialed production CORS", () => {
+  async function productionApp() {
+    const app = await createApp({
+      config: {
+        ...config,
+        NODE_ENV: "production",
+        WEB_ORIGIN: "https://nationreserve.com",
+      },
+      dependencies: {
+        postgres: dependency("up"),
+        redis: dependency("up"),
+        objectStorage: dependency("up"),
+      },
+    });
+    apps.push(app);
+    return app;
+  }
+
+  it.each(["https://nationreserve.com", "https://www.nationreserve.com"])(
+    "allows credentialed health requests and preflights from %s",
+    async (origin) => {
+      const app = await productionApp();
+      for (const url of ["/live", "/ready"]) {
+        const response = await app.inject({ method: "GET", url, headers: { origin } });
+        expect(response.statusCode).toBe(200);
+        expect(response.headers["access-control-allow-origin"]).toBe(origin);
+        expect(response.headers["access-control-allow-credentials"]).toBe("true");
+        expect(response.headers.vary).toContain("Origin");
+        const preflight = await app.inject({
+          method: "OPTIONS",
+          url,
+          headers: {
+            origin,
+            "access-control-request-method": "GET",
+            "access-control-request-headers": "authorization,content-type,x-request-id",
+          },
+        });
+        expect(preflight.statusCode).toBe(204);
+        expect(preflight.headers["access-control-allow-origin"]).toBe(origin);
+        expect(preflight.headers["access-control-allow-credentials"]).toBe("true");
+        expect(preflight.headers["access-control-allow-headers"]).toContain(
+          "x-request-id",
+        );
+      }
+    },
+  );
+
+  it.each([
+    "https://untrusted.example",
+    "https://nationreserve.com.untrusted.example",
+    "http://nationreserve.com",
+    "http://localhost:5173",
+    "null",
+  ])("does not authorize the untrusted origin %s", async (origin) => {
+    const app = await productionApp();
+    for (const method of ["GET", "OPTIONS"] as const) {
+      const response = await app.inject({
+        method,
+        url: "/ready",
+        headers: { origin, "access-control-request-method": "GET" },
+      });
+      expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+    }
+  });
+});
