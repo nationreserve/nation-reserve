@@ -477,3 +477,63 @@ pre {
     max-width: 95%;
   }
 }
+
+/* Temporary pre-launch passcode gate (see PasscodeGate.tsx) */
+.passcode-gate {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 1rem;
+  background: #f4f7fb;
+}
+.passcode-gate__card {
+  width: min(100%, 24rem);
+  padding: 2rem;
+  border: 1px solid var(--nr-border, #dde5f0);
+  border-radius: var(--nr-radius-lg, 1rem);
+  background: #ffffff;
+  box-shadow: 0 12px 40px rgba(23, 32, 51, 0.12);
+  display: grid;
+  gap: 0.75rem;
+}
+.passcode-gate__eyebrow {
+  margin: 0;
+  color: var(--nr-primary, #1d5fd0);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.passcode-gate__title {
+  margin: 0;
+  color: #172033;
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+.passcode-gate__hint {
+  margin: 0 0 0.5rem;
+  color: var(--nr-text-muted, #5b6b80);
+  line-height: 1.5;
+}
+.passcode-gate__input {
+  min-height: 44px;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--nr-border, #dde5f0);
+  border-radius: 0.55rem;
+  font: inherit;
+}
+.passcode-gate__input:focus-visible {
+  outline: 3px solid #8cb8ff;
+  outline-offset: 2px;
+}
+.passcode-gate__input[aria-invalid="true"] {
+  border-color: #d93025;
+}
+.passcode-gate__error {
+  margin: 0;
+  color: #d93025;
+  font-size: 0.875rem;
+}
+.passcode-gate__button {
+  width: 100%;
+}
