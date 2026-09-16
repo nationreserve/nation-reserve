@@ -168,7 +168,11 @@ export async function createApp(options: AppOptions): Promise<AppInstance> {
   await app.register(cors, {
     origin:
       options.config.NODE_ENV === "production"
-        ? ["https://nationreserve.com", "https://www.nationreserve.com"]
+        ? [
+            "https://nationreserve.com",
+            "https://www.nationreserve.com",
+            "https://nation-reserve.onrender.com",
+          ]
         : options.config.WEB_ORIGIN,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
