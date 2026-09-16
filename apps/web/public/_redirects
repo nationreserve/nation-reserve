@@ -1,0 +1,5 @@
+# SPA history-mode fallback for Render static hosting.
+# Serve index.html for any client-side route that is not a real static file
+# so the React router can render it (e.g. /login, /register, /roboworkpool/*).
+# Rendered paths (assets, _redirects itself) still resolve normally.
+/*  /index.html  200
