@@ -171,6 +171,7 @@ export async function createApp(options: AppOptions): Promise<AppInstance> {
         ? [
             "https://nationreserve.com",
             "https://www.nationreserve.com",
+            "https://nation-reserve.com",
             "https://nation-reserve.onrender.com",
           ]
         : options.config.WEB_ORIGIN,
